@@ -1,0 +1,21 @@
+name: "NoName Basic Robot"
+repository: "https://github.com/evias/gobots"
+fields:
+setup:
+shutdown:
+connection:
+  type: tcp
+  host: "192.168.4.1"
+  port: 1234
+  heartbeat:
+    command: heartbeat
+    frequence: 1000ms
+commands:
+  heartbeat:
+    wire:
+      string:
+        format: '{Heartbeat}\n'
+  stop:
+    wire:
+      string:
+        format: '{Stop}\n'
