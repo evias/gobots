@@ -4,40 +4,42 @@ import "time"
 
 // XXX
 type DriverConfig struct {
-	Name       string                   `yaml:name`
-	Repository string                   `yaml:repository`
-	Fields     map[string]FieldConfig   `yaml:fields`
-	Setup      []string                 `yaml:setup`
-	Shutdown   []string                 `yaml:shutdown`
-	Connection ConnectionConfig         `yaml:connection`
-	Commands   map[string]CommandConfig `yaml:commands`
+	Name       string                   `yaml:"name"`
+	Repository string                   `yaml:"repository"`
+	Fields     map[string]FieldConfig   `yaml:"fields"`
+	Setup      []string                 `yaml:"setup"`
+	Shutdown   []string                 `yaml:"shutdown"`
+	Connection ConnectionConfig         `yaml:"connection"`
+	Commands   map[string]CommandConfig `yaml:"commands"`
 }
 
 // XXX
 type FieldConfig struct {
-	Type    string `yaml:type`
-	Default any    `yaml:default`
+	Type    string `yaml:"type"`
+	Default any    `yaml:"default"`
 }
 
 // XXX
 type ConnectionConfig struct {
-	Type      string           `yaml:type`
-	Host      string           `yaml:host`
-	Port      uint16           `yaml:port`
-	Heartbeat CommandFrequency `yaml:heartbeat`
+	Type        string           `yaml:"type"`
+	Host        string           `yaml:"host"`
+	Port        uint16           `yaml:"port"`
+	Heartbeat   CommandFrequency `yaml:"heartbeat"`
+	MaxAttempts uint16           `yaml:"attempts"`
+	TimeoutMs   uint32           `yaml:"timeout"`
 }
 
 // XXX
 type CommandFrequency struct {
-	Command   string        `yaml:command`
-	Frequency time.Duration `yaml:frequency`
+	Command   string        `yaml:"command"`
+	Frequency time.Duration `yaml:"frequency"`
 }
 
 // XXX
 type CommandConfig struct {
-	Fields []string              `yaml:fields`
-	Params ParamsConfig          `yaml:params`
-	Wire   map[string]WireConfig `yaml:wire`
+	Fields []string              `yaml:"fields"`
+	Params ParamsConfig          `yaml:"params"`
+	Wire   map[string]WireConfig `yaml:"wire"`
 }
 
 // ParamName describes a parameter name, e.g. "direction".
@@ -57,7 +59,7 @@ type ParamsConfig map[ParamName]ParamConfig
 
 // XXX
 type WireConfig struct {
-	Format string `yaml:format`
+	Format string `yaml:"format"`
 	// Not exported.
 	values any
 }

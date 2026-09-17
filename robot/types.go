@@ -1,22 +1,27 @@
 package robot
 
 import (
-	"context"
-
 	"github.com/evias/gobots/botfile"
+	apiconn "github.com/evias/gobots/robot/conn"
 )
 
-// XXX
+// IRobot defines the contract for Robot devices.
 type IRobot interface {
+	// Name should return the device's name as provided by Driver.
 	Name() string
 
-	// Quit returns a channel which is closed when the instance is stopped.
+	// Quit should return a channel which is closed when the instance is stopped.
 	Quit() <-chan struct{}
 
-	Connect(ctx context.Context, host string) error
-	TryConnect(ctx context.Context, host string, attempts int) error
+	// Transport should return a connected transport or nil.
+	Transport() apiconn.Transport
 
-	Disconnect(hosts ...string) error
+	// Connect should attempt to connect using a [botfile.ConnectionConfig] object.
+	Connect(conf botfile.ConnectionConfig) error
 
-	Send(host string, msg botfile.Message, args any) error
+	// Disconnect should close any opened connection to the device.
+	Disconnect() error
+
+	// Send should attempt to send a [botfile.Message] to a connected device.
+	Send(msg botfile.Message, args any) error
 }

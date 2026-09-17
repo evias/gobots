@@ -1,7 +1,6 @@
 package connect
 
 import (
-	"context"
 	"fmt"
 	"log/slog"
 	"os"
@@ -55,19 +54,14 @@ func NewCmdConnect() *cobra.Command {
 			robot := robot.New(driver)
 			slog.Info(fmt.Sprintf("Gobots driver name: %s", robot.Name()))
 
-			// 10 seconds max connectivity ("keep-alive").
-			connCtx, cancelCtx := context.WithTimeout(cmd.Context(), 10*time.Second)
-			defer cancelCtx()
+			// XXX --attempts to overwrite driver configuration
 
-			if err := robot.TryConnect(connCtx, host, 3); err != nil {
+			if err := robot.Connect(driver.Config().Connection); err != nil {
 				slog.Error(fmt.Sprintf("failed to connect with gobot: %s", err.Error()))
 				return err
 			}
-			defer robot.Disconnect(host)
-
-			select {
-			case <-time.After(2 * time.Second):
-			}
+			defer robot.Disconnect()
+			time.Sleep(2 * time.Second)
 
 			// Send MOVE, then wait 2 seconds, then STOP
 			type MoveRequest struct {
@@ -75,29 +69,18 @@ func NewCmdConnect() *cobra.Command {
 				Speed     int
 			}
 
-			moveWire := driver.WireConfig("move")
+			moveWire := driver.WireConfig("move", nil)
 			moveArgs := MoveRequest{Direction: 1, Speed: 50}
-			if err := robot.Send(host, botfile.NewMessage(moveWire), moveArgs); err != nil {
+			if err := robot.Send(botfile.NewMessage(moveWire), moveArgs); err != nil {
 				slog.Error(fmt.Sprintf("failed to send MOVE command: %s", err.Error()))
 				return err
 			}
+			time.Sleep(2 * time.Second)
 
-			select {
-			case <-time.After(2 * time.Second):
-			}
-
-			stopWire := driver.WireConfig("stop")
-			if err := robot.Send(host, botfile.NewMessage(stopWire), nil); err != nil {
+			stopWire := driver.WireConfig("stop", nil)
+			if err := robot.Send(botfile.NewMessage(stopWire), nil); err != nil {
 				slog.Error(fmt.Sprintf("failed to send STOP command: %s", err.Error()))
 				return err
-			}
-
-			select {
-			case <-connCtx.Done():
-				slog.Info(fmt.Sprintf("Connection context expired"))
-
-			case <-robot.Quit():
-				slog.Info(fmt.Sprintf("Robot is going to sleep..."))
 			}
 
 			return nil
