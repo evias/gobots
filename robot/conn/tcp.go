@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"net"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -20,19 +19,30 @@ const (
 	DefaultConnectionAttempts  = 3
 )
 
-// XXX
+// TCPTransport implements the [Transport] interface to provide a TCP layer
+// for connection and communication.
+//
+// Notable method implementations include:
+// - [TCPTransport#Open]: Connect to a remote device over TCP.
+// - [TCPTransport#Close]: Disconnect from a connected device.
+// - [TCPTransport#Read]: Read raw bytes from a connected device.
+// - [TCPTransport#Write]: Send raw bytes to a connection device.
+//
+// This implementation is thread-safe. An internal mutex lock is taken
+// for all state transitions, thereby protecting the internal conn instance.
 type TCPTransport struct {
 	conf   botfile.ConnectionConfig
 	logger *slog.Logger
 
-	mtx  *sync.Mutex
-	conn net.Conn // under mtx
+	mtx    *sync.Mutex
+	conn   net.Conn // under mtx
+	dialFn DialFunc
 }
 
 // Ensure that our implementation satisfies interface.
 var _ Transport = (*TCPTransport)(nil)
 
-// XXX
+// NewTCPTransport creates a new Transport instance around a [botfile.ConnectionConfig].
 func NewTCPTransport(
 	cfg botfile.ConnectionConfig,
 	options ...TransportOption,
@@ -51,7 +61,7 @@ func NewTCPTransport(
 	return tcpt
 }
 
-// XXX
+// WithConnectionConfig implements an option helper to inject a custom connection configuration.
 func WithConnectionConfig(cfg botfile.ConnectionConfig) TransportOption {
 	return func(t Transport) {
 		tcpt := t.(*TCPTransport)
@@ -59,7 +69,7 @@ func WithConnectionConfig(cfg botfile.ConnectionConfig) TransportOption {
 	}
 }
 
-// XXX
+// WithLogger implements an option helper to inject a custom [slog.Logger].
 func WithLogger(logger *slog.Logger, lvl slog.Level) TransportOption {
 	return func(t Transport) {
 		tcpt := t.(*TCPTransport)
@@ -67,7 +77,33 @@ func WithLogger(logger *slog.Logger, lvl slog.Level) TransportOption {
 	}
 }
 
-// XXX
+// WithDialer implements an option helper to inject a custom [DialFunc].
+func WithDialer(fn DialFunc) TransportOption {
+	return func(t Transport) {
+		tcpt := t.(*TCPTransport)
+		tcpt.dialFn = fn
+	}
+}
+
+// Type returns the transport type, e.g. "tcp", "serial", "ble".
+func (*TCPTransport) Type() string {
+	return "tcp"
+}
+
+// Dialer should return a dial function, or [net.Dialer#DialContext]
+func (tcpt *TCPTransport) Dialer() DialFunc {
+	// use custom dialer process as injected
+	if tcpt.dialFn != nil {
+		return tcpt.dialFn
+	}
+
+	// fallback to net.Dialer implementation
+	return (&net.Dialer{
+		Timeout: DefaultConnectionTimeoutMs * time.Millisecond,
+	}).DialContext
+}
+
+// Addr returns the remote address or nil, i.e. [net.Conn#RemoteAddr].
 func (tcpt *TCPTransport) Addr() net.Addr {
 	conn := tcpt.Conn()
 	if conn == nil {
@@ -77,7 +113,7 @@ func (tcpt *TCPTransport) Addr() net.Addr {
 	return conn.RemoteAddr()
 }
 
-// XXX
+// Conn returns a [net.Conn] instance or nil.
 func (tcpt *TCPTransport) Conn() net.Conn {
 	tcpt.mtx.Lock()
 	defer tcpt.mtx.Unlock()
@@ -85,21 +121,12 @@ func (tcpt *TCPTransport) Conn() net.Conn {
 	return tcpt.conn
 }
 
-// XXX
-func (*TCPTransport) Type() string {
-	return "tcp"
-}
-
-// XXX
+// String returns a string representation of the instance.
 func (tcpt *TCPTransport) String() string {
-	protocol := tcpt.Type()
-	host := tcpt.conf.Host
-	port := tcpt.conf.Port
-
-	return fmt.Sprintf("%s://%s:%d", protocol, host, port)
+	return net.JoinHostPort(tcpt.conf.Host, strconv.Itoa(int(tcpt.conf.Port)))
 }
 
-// XXX
+// Open dials the remote address, i.e. connect to the remote.
 func (tcpt *TCPTransport) Open() error {
 	if tcpt.conf.TimeoutMs == 0 {
 		tcpt.conf.TimeoutMs = DefaultConnectionTimeoutMs
@@ -109,18 +136,14 @@ func (tcpt *TCPTransport) Open() error {
 		tcpt.conf.MaxAttempts = DefaultConnectionAttempts
 	}
 
-	if len(tcpt.conf.Host) == 0 || tcpt.conf.Port == 0 {
-		return &apierr.AppError{
-			Code:    apierr.ErrInvalidConnection,
-			Message: "TCP transport requires host and port to be non-empty",
-			Cause:   nil,
-		}
+	if len(tcpt.conf.Host) == 0 {
+		tcpt.conf.Host = "127.0.0.1"
 	}
 
 	var (
-		hostWithPort = hostWithPort(tcpt.conf.Host, int(tcpt.conf.Port))
+		hostWithPort = tcpt.String()
+		dialerFn     = tcpt.Dialer()
 		conn         net.Conn
-		dialer       net.Dialer
 		err          error
 	)
 
@@ -134,7 +157,8 @@ func (tcpt *TCPTransport) Open() error {
 		dialCtx, cancelFn := context.WithTimeout(context.Background(), timeoutDuration)
 		defer cancelFn()
 
-		if conn, err = dialer.DialContext(dialCtx, "tcp", hostWithPort); err != nil {
+		// XXX dialerFn should be called in a goroutine to avoid blocking main thread.
+		if conn, err = dialerFn(dialCtx, "tcp", hostWithPort); err != nil {
 			// r.addError(err)
 			tcpt.logger.Error("Failed connection attempt",
 				"host", hostWithPort, "attempts", at,
@@ -159,7 +183,7 @@ func (tcpt *TCPTransport) Open() error {
 	return nil
 }
 
-// XXX
+// Close closes the connection to the remote.
 func (tcpt *TCPTransport) Close() error {
 	tcpt.mtx.Lock()
 	defer tcpt.mtx.Unlock()
@@ -171,7 +195,7 @@ func (tcpt *TCPTransport) Close() error {
 	return tcpt.conn.Close()
 }
 
-// XXX
+// Read reads bytes from the stream, p must be pre-allocated.
 func (tcpt *TCPTransport) Read(
 	bytes []byte,
 ) (int, error) {
@@ -181,22 +205,10 @@ func (tcpt *TCPTransport) Read(
 	return stream.Read(bytes)
 }
 
-// XXX
+// Write sends bytes to the stream, p must be pre-allocated.
 func (tcpt *TCPTransport) Write(p []byte) (int, error) {
 	conn := tcpt.Conn()
 	stream := bufio.NewWriter(conn)
 
 	return stream.Write(p)
-}
-
-// ----------------------------------------------------------------------------
-// PRIVATE HELPERS
-
-// XXX
-func hostWithPort(host string, port int) string {
-	if !strings.Contains(host, ":"+strconv.Itoa(port)) {
-		host += ":" + strconv.Itoa(port)
-	}
-
-	return host
 }
