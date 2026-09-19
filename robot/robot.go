@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -154,6 +155,8 @@ func (r *Robot) Transport() apiconn.Transport {
 // otherwise returns nil.
 //
 // Connect implements IRobot.
+//
+// TODO(evias): Make receiveRoutine configurable where necessary/possible.
 func (r *Robot) Connect(
 	conf botfile.ConnectionConfig,
 ) error {
@@ -170,14 +173,16 @@ func (r *Robot) Connect(
 	}
 
 	r.mtx.Lock()
-	r.hostWithPort = hostWithPort(conf.Host, int(conf.Port))
+	r.hostWithPort = net.JoinHostPort(conf.Host, strconv.Itoa(int(conf.Port)))
 	r.connTransport = transport
 	r.remoteAddress = transport.Addr()
 	r.mtx.Unlock()
 
 	r.logger.Info(fmt.Sprintf("Connected to host %s", r.hostWithPort))
 
-	// XXX
+	// Robot is responsible for the receiving routine which listens to messages
+	// from an connected peer. This routine continuously reads messages until
+	// the context expires or gets cancelled.
 	go r.receiveRoutine(r.ctx, transport)
 	return nil
 }

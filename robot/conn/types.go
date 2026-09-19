@@ -36,5 +36,5 @@ type Transport interface {
 	String() string
 }
 
-// XXX
+// TransportOption defines the contract for [Transport] option helpers.
 type TransportOption func(Transport)

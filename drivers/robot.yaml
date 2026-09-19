@@ -1,4 +1,4 @@
-name: "NoName Basic Robot"
+name: "Generic Edge Device"
 repository: "https://github.com/evias/gobots"
 fields:
 setup:
@@ -14,8 +14,8 @@ commands:
   heartbeat:
     wire:
       string:
-        format: '{Heartbeat}\n'
+        format: '{Heartbeat}'
   stop:
     wire:
       string:
-        format: '{Stop}\n'
+        format: '{Stop}'
