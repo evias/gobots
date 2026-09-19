@@ -7,6 +7,7 @@ import (
 
 	"github.com/evias/gobots/botfile"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestNewTCPTransport tests creating a TCPTransport
@@ -61,6 +62,7 @@ func TestTCPTransport_OpenClose(t *testing.T) {
 	assert.NoError(t, closeErr)
 }
 
+// TestTCPTransport_Write tests sending bytes through an opened TCPTransport.
 func TestTCPTransport_Write(t *testing.T) {
 	client, server := net.Pipe()
 	defer client.Close()
@@ -74,6 +76,9 @@ func TestTCPTransport_Write(t *testing.T) {
 		return client, nil
 	}))
 
+	err := tcpt.Open()
+	require.NoError(t, err)
+
 	// Peer runs in a goroutine — net.Pipe is synchronous, so
 	// Write blocks until the peer Reads.
 	go func() {
@@ -81,11 +86,42 @@ func TestTCPTransport_Write(t *testing.T) {
 		n, err := server.Read(buf)
 		assert.NoError(t, err, "reading should not error")
 		assert.Equalf(t, "ping", string(buf[:n]),
-			"got %q, want %q", buf[:n], "ping")
+			"expected %q, got %q", "ping", buf[:n])
 	}()
 
 	if num, err := tcpt.Write([]byte("ping")); err != nil {
 		assert.NoError(t, err, "sending bytes should not error")
 		assert.NotEmpty(t, num)
 	}
+}
+
+// TestTCPTransport_Read tests reading bytes using an opened TCPTransport.
+func TestTCPTransport_Read(t *testing.T) {
+	client, server := net.Pipe()
+	defer client.Close()
+	defer server.Close()
+
+	tcpt := NewTCPTransport(botfile.ConnectionConfig{
+		Host: "localhost",
+		Port: 1234,
+	}, WithDialer(func(ctx context.Context, network, addr string) (net.Conn, error) {
+		assert.Equalf(t, "localhost:1234", addr, "unexpected addr %q", addr)
+		return client, nil
+	}))
+
+	err := tcpt.Open()
+	require.NoError(t, err)
+
+	go func() {
+		server.Write([]byte("pong"))
+		// keep the goroutine alive until the test reads, or close
+	}()
+
+	got := make([]byte, 4)
+	num, err := tcpt.Read(got)
+	assert.NoError(t, err, "reading should not error")
+	assert.NotEmpty(t, num)
+
+	assert.Equalf(t, "pong", string(got),
+		"expected %q, got %q", "pong", string(got))
 }
