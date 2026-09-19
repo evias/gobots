@@ -8,34 +8,61 @@ import (
 	"github.com/goccy/go-yaml"
 )
 
-// XXX
+// Driver defines the contract for device drivers.
+//
+// A device driver typically defines connection details and executable commands
+// for a particular device, e.g. a smartcar robot provides commands "move"/"turn".
+//
+// Communication with devices is ruled by a pre-configured message layer named
+// the Wire protocol. Wire defines JSON-formatted data-driven templates such that
+// parameters may be injected at the time of sending messages.
 type Driver interface {
+	// Name should return the device driver's name.
 	Name() string
+
+	// Host should return a string-representation of the device hostname.
 	Host() string
+	// Port should return a port number, used for connection to the device.
 	Port() uint16
+
+	// Config should return a YAML-mapped [DriverConfig] instance.
 	Config() DriverConfig
 
-	HasCommand(string) bool
-	WireConfig(string, any) WireConfig
+	// HasCommand should return true given an existing command name.
+	HasCommand(command string) bool
+	// HasField should return true given an existing field name.
+	HasField(field string) bool
+	// FieldType should return the type of a field by name,
+	// e.g. "string", "number" or "duration".
+	FieldType(name string) string
+	// FieldDefault should return the field's default value as a [reflect.Value].
+	FieldDefault(name string) reflect.Value
+
+	// CommandConfig should return a [CommandConfig] for a command name.
+	CommandConfig(command string) CommandConfig
+	// WireConfig should return a [WireConfig] for command, with values args.
+	WireConfig(command string, args any) WireConfig
 }
 
-// XXX
+// DriverOption defines the contract for [Driver] option helpers.
+type DriverOption func(Driver)
+
+// ----------------------------------------------------------------------------
+
+// robotDriver is a private implementation of the [Driver] interface.
 type robotDriver struct {
 	name string
 	conf DriverConfig
 }
 
-// XXX
-type DriverOption func(*robotDriver)
-
 // Ensure that our implementation satisfies interface.
 var _ Driver = (*robotDriver)(nil)
 
-// XXX
+// NewDriver creates a [Driver] instance around conf and options.
 func NewDriver(
 	conf DriverConfig,
 	options ...DriverOption,
-) *robotDriver {
+) Driver {
 	drv := &robotDriver{
 		name: conf.Name,
 		conf: conf,
@@ -48,39 +75,57 @@ func NewDriver(
 	return drv
 }
 
-// XXX
+// WithHostAndPort implements an option helper to inject a custom host and port.
+func WithHostAndPort(host string, port uint16) DriverOption {
+	return func(d Driver) {
+		rd := d.(*robotDriver)
+		rd.conf.Connection.Host = host
+		rd.conf.Connection.Port = port
+	}
+}
+
+// WithMaxAttempts implements an option helper to inject a max number of attempts to connect.
+func WithMaxAttempts(max uint16) DriverOption {
+	return func(d Driver) {
+		rd := d.(*robotDriver)
+		rd.conf.Connection.MaxAttempts = max
+	}
+}
+
+// Name returns the name a read from [DriverConfig] upon creation.
 func (drv *robotDriver) Name() string {
 	return drv.name
 }
 
-// XXX
+// Host returns the driver's connection hostname, e.g. "192.168.4.1"
 func (drv *robotDriver) Host() string {
 	return drv.conf.Connection.Host
 }
 
-// XXX
+// Port returns the driver's connection port number.
 func (drv *robotDriver) Port() uint16 {
 	return drv.conf.Connection.Port
 }
 
-// XXX
+// Config returns the injected [DriverConfig].
 func (drv *robotDriver) Config() DriverConfig {
 	return drv.conf
 }
 
-// XXX
+// HasCommands reads the [DriverConfig] to find a [CommandConfig] by name.
 func (drv *robotDriver) HasCommand(command string) bool {
 	_, ok := drv.conf.Commands[command]
 	return ok
 }
 
-// XXX
+// HasField reads the [DriverConfig] to find a [FieldConfig] by name.
 func (drv *robotDriver) HasField(field string) bool {
 	_, ok := drv.conf.Fields[field]
 	return ok
 }
 
-// XXX
+// FieldType returns a string-representation of the type of a field,
+// importantly this defines the reflection process for default values.
 func (drv *robotDriver) FieldType(name string) string {
 	defaultType := "string"
 	if !drv.HasField(name) {
@@ -91,7 +136,7 @@ func (drv *robotDriver) FieldType(name string) string {
 	return field.Type
 }
 
-// XXX
+// FieldDefault returns the field's default value as a [reflect.Value].
 func (drv *robotDriver) FieldDefault(name string) reflect.Value {
 	defaultValue := reflect.New(reflect.TypeOf([]byte{}))
 	defaultValue.SetBytes([]byte{})
@@ -130,13 +175,15 @@ func (drv *robotDriver) FieldDefault(name string) reflect.Value {
 		}
 		v.SetFloat(i)
 		return v
+
+		// XXX case ft == "duration" should recognize e.g. "5s".
 	}
 
 	// Fallback to empty slice of bytes.
 	return defaultValue
 }
 
-// XXX
+// CommandConfig returns a [CommandConfig] object by name.
 func (drv *robotDriver) CommandConfig(command string) CommandConfig {
 	defaultCmd := CommandConfig{
 		Fields: []string{},
@@ -153,7 +200,8 @@ func (drv *robotDriver) CommandConfig(command string) CommandConfig {
 	return cmd
 }
 
-// XXX
+// WireConfig returns a [WireConfig] object for command, with fields
+// and parameters filled from args.
 func (drv *robotDriver) WireConfig(command string, args any) WireConfig {
 	defaultWire := WireConfig{Format: "{{{.Value}}}", values: args}
 	if !drv.HasCommand(command) {
@@ -206,10 +254,14 @@ func (drv *robotDriver) WireConfig(command string, args any) WireConfig {
 
 // ----------------------------------------------------------------------------
 
-// XXX
+// LoadFromConfig loads a [Driver] instance from a YAML configuration file.
+// An error is returned if the file does not exist, or if it cannot be read,
+// or if the format does not satisfy the unmarshalling to [DriverConfig].
+//
+// TODO(evias): Should accept options DriverOption if any available.
 func LoadFromConfig(
 	cfgFile string,
-) (*robotDriver, error) {
+) (Driver, error) {
 	if _, err := os.Stat(cfgFile); err != nil {
 		return nil, fmt.Errorf("gobot driver file not found: %w", err)
 	}
