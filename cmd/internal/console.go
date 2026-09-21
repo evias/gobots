@@ -12,14 +12,17 @@ import (
 	"github.com/mattn/go-shellwords"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"golang.org/x/term"
 
 	"github.com/evias/gobots/botfile"
 	"github.com/evias/gobots/robot"
 )
 
 var (
-	hostOrDriver string
-	shellParser  = shellwords.NewParser()
+	hostOrDriver  string
+	useOffline    bool
+	enableConnect bool
+	shellParser   = shellwords.NewParser()
 )
 
 func NewCmdConsole() *cobra.Command {
@@ -29,21 +32,22 @@ func NewCmdConsole() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			hostOrDriver = args[0]
+			enableConnect = !useOffline
 
-			// If a driver file is passed as first argument, use it to connect.
-			if _, err := os.Stat(hostOrDriver); err == nil {
-				driverFile = hostOrDriver
-			}
-
-			if _, err := os.Stat(driverFile); err != nil && os.IsNotExist(err) {
-				slog.Error(fmt.Sprintf("failed to open driver file: %s", err.Error()))
+			// Load the device driver configuration file (YAML) into a [botfile.Driver].
+			var (
+				driver botfile.Driver
+				err    error
+			)
+			if driver, err = loadDriver(hostOrDriver, driverFile); err != nil {
 				return err
 			}
 
-			driver, err := botfile.LoadFromConfig(driverFile)
+			// Save terminal state before activating interactive terminal (go-prompt).
+			fd := int(os.Stdin.Fd())
+			oldState, err := term.GetState(fd)
 			if err != nil {
-				slog.Error(fmt.Sprintf("failed to load driver file: %s", err.Error()))
-				return err
+				return fmt.Errorf("not a terminal? %w", err)
 			}
 
 			// --debug enables debug messages in default logger.
@@ -56,49 +60,32 @@ func NewCmdConsole() *cobra.Command {
 				slog.SetDefault(slog.New(handler))
 			}
 
-			var (
-				deviceHost string
-				devicePort string
-				actualPort uint64
-				hostErr    error
-			)
-			if hostOrDriver == driverFile {
-				deviceHost = driver.Host()
-				devicePort = strconv.Itoa(int(driver.Port()))
-			} else if deviceHost, devicePort, hostErr = net.SplitHostPort(hostOrDriver); hostErr != nil {
-				slog.Error(fmt.Sprintf("failed to use custom host: %s - %s", hostOrDriver, err.Error()))
-				return err
-			}
-
-			if actualPort, err = strconv.ParseUint(devicePort, 10, 16); err != nil {
-				slog.Error(fmt.Sprintf("invalid port: %s - %s", devicePort, err.Error()))
-				return err
-			}
-
-			// Overwrite host/port for connection if necessary.
-			botfile.WithHostAndPort(deviceHost, uint16(actualPort))(driver)
-
 			slog.Debug(fmt.Sprintf("Driver: %s", driverFile))
 			slog.Debug(fmt.Sprintf("Host: %s", driver.Host()))
 			slog.Debug(fmt.Sprintf("Port: %d", driver.Port()))
 
 			robot := robot.New(driver)
-			slog.Info(fmt.Sprintf("Connecting to gobots driver: %s", robot.Name()))
+			slog.Info(fmt.Sprintf("Using gobots driver: %s", robot.Name()))
 
 			if connAttempts > 0 && connAttempts != int(driver.Config().Connection.MaxAttempts) {
 				botfile.WithMaxAttempts(uint16(connAttempts))(driver)
 			}
 
-			if err := robot.Connect(driver.Config().Connection); err != nil {
-				slog.Error(fmt.Sprintf("failed to connect with gobot: %s", err.Error()))
-				return err
+			if enableConnect {
+				if err := robot.Connect(driver.Config().Connection); err != nil {
+					slog.Error(fmt.Sprintf("failed to connect with gobot: %s", err.Error()))
+					return err
+				}
+				defer robot.Disconnect()
 			}
-			defer robot.Disconnect()
 
 			// Stop upon receiving SIGTERM,SIGKILL or CTRL-C.
 			// TrapSignal(slog.Default(), func() {
 			// 	robot.Disconnect()
 			// }, os.Interrupt, syscall.SIGTERM, syscall.SIGKILL)
+
+			// Restore terminal state in teardown process.
+			defer term.Restore(fd, oldState)
 
 			p := prompt.New(
 				executor,
@@ -112,8 +99,19 @@ func NewCmdConsole() *cobra.Command {
 				prompt.OptionDescriptionTextColor(prompt.Black),
 				prompt.OptionMaxSuggestion(4),
 			)
-			p.Run()
-			return nil
+
+			for {
+				line := p.Input()
+				switch line {
+				case "":
+					continue
+				case "exit", "quit":
+					fmt.Println("bye!")
+					return nil
+				}
+
+				executor(line)
+			}
 		},
 	}
 
@@ -123,8 +121,60 @@ func NewCmdConsole() *cobra.Command {
 		"The connection tries round, in case connection does not succeed (optional).")
 	seedCmd.Flags().BoolVarP(&enableDebug, "debug", "D", false,
 		"Sets whether to enable debug mode/logs or not (optional).")
+	seedCmd.Flags().BoolVarP(&useOffline, "offline", "O", false,
+		"Sets whether to enable offline mode, i.e. no connection (optional).")
 
 	return seedCmd
+}
+
+// -----------------------------------------------------------------------------
+// Driver — determines the connection, commands and fields for a device.
+// -----------------------------------------------------------------------------
+
+// loadDriver returns a [botfile.Driver] after reading driverFile.
+// If hostOrDriver contains an existing file name, it has precedence over driverFile.
+// The [botfile.Driver#Host] and [botfile.Driver#Port] are updated if necessary in
+// the returned [botfile.Driver] instance.
+func loadDriver(hostOrDriver, driverFile string) (botfile.Driver, error) {
+	// If a driver file is passed as first argument, use it to connect.
+	if _, err := os.Stat(hostOrDriver); err == nil {
+		driverFile = hostOrDriver
+	}
+
+	if _, err := os.Stat(driverFile); err != nil && os.IsNotExist(err) {
+		slog.Error(fmt.Sprintf("failed to open driver file: %s", err.Error()))
+		return nil, err
+	}
+
+	driver, err := botfile.LoadFromConfig(driverFile)
+	if err != nil {
+		slog.Error(fmt.Sprintf("failed to load driver file: %s", err.Error()))
+		return nil, err
+	}
+
+	var (
+		deviceHost string
+		devicePort string
+		actualPort uint64
+		hostErr    error
+	)
+	if hostOrDriver == driverFile {
+		deviceHost = driver.Host()
+		devicePort = strconv.Itoa(int(driver.Port()))
+	} else if deviceHost, devicePort, hostErr = net.SplitHostPort(hostOrDriver); hostErr != nil {
+		slog.Error(fmt.Sprintf("failed to use custom host: %s - %s", hostOrDriver, err.Error()))
+		return nil, err
+	}
+
+	if actualPort, err = strconv.ParseUint(devicePort, 10, 16); err != nil {
+		slog.Error(fmt.Sprintf("invalid port: %s - %s", devicePort, err.Error()))
+		return nil, err
+	}
+
+	// Overwrite host/port for connection if necessary.
+	botfile.WithHostAndPort(deviceHost, uint16(actualPort))(driver)
+
+	return driver, nil
 }
 
 // -----------------------------------------------------------------------------
@@ -134,13 +184,6 @@ func NewCmdConsole() *cobra.Command {
 // executor is called by go-prompt every time the user presses Enter.
 func executor(in string) {
 	line := strings.TrimSpace(in)
-	switch line {
-	case "":
-		return
-	case "exit", "quit":
-		fmt.Println("bye!")
-		os.Exit(0)
-	}
 
 	if err := executeLine(line); err != nil {
 		// Cobra already printed the error to stderr; keep REPL alive.
