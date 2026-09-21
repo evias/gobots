@@ -155,17 +155,21 @@ func (tcpt *TCPTransport) Open() error {
 
 		timeoutDuration := time.Duration(tcpt.conf.TimeoutMs) * time.Millisecond
 		dialCtx, cancelFn := context.WithTimeout(context.Background(), timeoutDuration)
-		defer cancelFn()
 
 		// XXX dialerFn should be called in a goroutine to avoid blocking main thread.
-		if conn, err = dialerFn(dialCtx, "tcp", hostWithPort); err != nil {
-			// r.addError(err)
-			tcpt.logger.Error("Failed connection attempt",
-				"host", hostWithPort, "attempts", at,
-				"err", err.Error(),
-			)
-			continue
+		// XXX Synchronicity of the [net.Dialer#DialContext] calls must be kept.
+		conn, err = dialerFn(dialCtx, "tcp", hostWithPort)
+		cancelFn() // cancel context directly after sync-call of dialer func
+
+		if err == nil {
+			break
 		}
+
+		tcpt.logger.Error("Failed connection attempt",
+			"host", hostWithPort, "attempts", at,
+			"err", err.Error(),
+		)
+		// continue
 	}
 
 	if err != nil {

@@ -1,4 +1,4 @@
-package main
+package internal
 
 import (
 	"fmt"
@@ -30,19 +30,10 @@ var (
 func init() {
 	rootCmd.AddCommand(NewCmdRun())
 	rootCmd.AddCommand(NewCmdConsole())
-
-	rootCmd.Flags().StringVarP(&driverFile, "driver", "d", defaultDriver,
-		"The gobots driver file for your robot (optional).")
-	rootCmd.Flags().IntVarP(&connAttempts, "attempts", "a", 3,
-		"The connection tries round, in case connection does not succeed (optional).")
-	rootCmd.Flags().BoolVarP(&enableDebug, "debug", "D", false,
-		"Sets whether to enable debug mode/logs or not (optional).")
 }
 
-func main() {
-	if err := rootCmd.Execute(); err != nil {
-		os.Exit(1)
-	}
+func Cmd() *cobra.Command {
+	return rootCmd
 }
 
 // Internal interface for logging

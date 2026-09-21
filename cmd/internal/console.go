@@ -1,4 +1,4 @@
-package main
+package internal
 
 import (
 	"fmt"
@@ -7,7 +7,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"syscall"
 
 	"github.com/c-bata/go-prompt"
 	"github.com/mattn/go-shellwords"
@@ -97,9 +96,9 @@ func NewCmdConsole() *cobra.Command {
 			defer robot.Disconnect()
 
 			// Stop upon receiving SIGTERM,SIGKILL or CTRL-C.
-			TrapSignal(slog.Default(), func() {
-				robot.Disconnect()
-			}, os.Interrupt, syscall.SIGTERM, syscall.SIGKILL)
+			// TrapSignal(slog.Default(), func() {
+			// 	robot.Disconnect()
+			// }, os.Interrupt, syscall.SIGTERM, syscall.SIGKILL)
 
 			p := prompt.New(
 				executor,
@@ -117,6 +116,13 @@ func NewCmdConsole() *cobra.Command {
 			return nil
 		},
 	}
+
+	seedCmd.Flags().StringVarP(&driverFile, "driver", "d", defaultDriver,
+		"The gobots driver file for your robot (optional).")
+	seedCmd.Flags().IntVarP(&connAttempts, "attempts", "a", 3,
+		"The connection tries round, in case connection does not succeed (optional).")
+	seedCmd.Flags().BoolVarP(&enableDebug, "debug", "D", false,
+		"Sets whether to enable debug mode/logs or not (optional).")
 
 	return seedCmd
 }
