@@ -1,6 +1,6 @@
 module github.com/evias/gobots
 
-go 1.24.2
+go 1.26.0
 
 require (
 	github.com/c-bata/go-prompt v0.2.6
@@ -19,5 +19,5 @@ require (
 	github.com/mattn/go-tty v0.0.3 // indirect
 	github.com/pkg/term v1.2.0-beta.2 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
-	golang.org/x/sys v0.0.0-20200918174421-af09f7315aff // indirect
+	golang.org/x/sys v0.48.0 // indirect
 )
