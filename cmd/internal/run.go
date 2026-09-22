@@ -12,7 +12,7 @@ var (
 )
 
 func NewCmdRun() *cobra.Command {
-	seedCmd := &cobra.Command{
+	runCmd := &cobra.Command{
 		Use:   "run <flow> [options]",
 		Short: "Run gobots flows with your botfiles.",
 		Args:  cobra.ExactArgs(1),
@@ -24,6 +24,5 @@ func NewCmdRun() *cobra.Command {
 		},
 	}
 
-	seedCmd.Flags().StringVarP(&flow, "flow", "f", "", "The path to a .yaml botfile.")
-	return seedCmd
+	return runCmd
 }

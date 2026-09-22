@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -26,13 +27,23 @@ var (
 )
 
 func NewCmdConsole() *cobra.Command {
-	seedCmd := &cobra.Command{
+	consoleCmd := &cobra.Command{
 		Use:   "console <host> [options]",
 		Short: "Connect to gobots with your botfiles and open an interactive console.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			hostOrDriver = args[0]
 			enableConnect = !useOffline
+
+			// --debug enables debug messages in default logger.
+			logLevel := new(slog.LevelVar)
+			if enableDebug {
+				logLevel.Set(slog.LevelDebug)
+				handler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+					Level: logLevel,
+				})
+				slog.SetDefault(slog.New(handler))
+			}
 
 			// Load the device driver configuration file (YAML) into a [botfile.Driver].
 			var (
@@ -48,16 +59,6 @@ func NewCmdConsole() *cobra.Command {
 			oldState, err := term.GetState(fd)
 			if err != nil {
 				return fmt.Errorf("not a terminal? %w", err)
-			}
-
-			// --debug enables debug messages in default logger.
-			logLevel := new(slog.LevelVar)
-			if enableDebug {
-				logLevel.Set(slog.LevelDebug)
-				handler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-					Level: logLevel,
-				})
-				slog.SetDefault(slog.New(handler))
 			}
 
 			slog.Debug(fmt.Sprintf("Driver: %s", driverFile))
@@ -78,11 +79,6 @@ func NewCmdConsole() *cobra.Command {
 				}
 				defer robot.Disconnect()
 			}
-
-			// Stop upon receiving SIGTERM,SIGKILL or CTRL-C.
-			// TrapSignal(slog.Default(), func() {
-			// 	robot.Disconnect()
-			// }, os.Interrupt, syscall.SIGTERM, syscall.SIGKILL)
 
 			// Restore terminal state in teardown process.
 			defer term.Restore(fd, oldState)
@@ -115,16 +111,16 @@ func NewCmdConsole() *cobra.Command {
 		},
 	}
 
-	seedCmd.Flags().StringVarP(&driverFile, "driver", "d", defaultDriver,
+	consoleCmd.Flags().StringVarP(&driverFile, "driver", "d", defaultDriver,
 		"The gobots driver file for your robot (optional).")
-	seedCmd.Flags().IntVarP(&connAttempts, "attempts", "a", 3,
+	consoleCmd.Flags().IntVarP(&connAttempts, "attempts", "a", 3,
 		"The connection tries round, in case connection does not succeed (optional).")
-	seedCmd.Flags().BoolVarP(&enableDebug, "debug", "D", false,
+	consoleCmd.Flags().BoolVarP(&enableDebug, "debug", "D", false,
 		"Sets whether to enable debug mode/logs or not (optional).")
-	seedCmd.Flags().BoolVarP(&useOffline, "offline", "O", false,
+	consoleCmd.Flags().BoolVarP(&useOffline, "offline", "O", false,
 		"Sets whether to enable offline mode, i.e. no connection (optional).")
 
-	return seedCmd
+	return consoleCmd
 }
 
 // -----------------------------------------------------------------------------
@@ -208,9 +204,20 @@ func executeLine(line string) error {
 	saved := os.Args
 	defer func() { os.Args = saved }()
 
+	// Prepend binary to complete command, e.g. "gobots exec help"
 	os.Args = append([]string{os.Args[0]}, args...)
+
 	rootCmd.SetOut(os.Stdout)
 	rootCmd.SetErr(os.Stderr)
+
+	rootCmd.Flags().Set("driver", driverFile)
+	if enableDebug {
+		rootCmd.Flags().Set("debug", "")
+	}
+	if connAttempts > 0 {
+		rootCmd.Flags().Set("attempts", strconv.Itoa(connAttempts))
+	}
+
 	return rootCmd.Execute()
 }
 
@@ -254,8 +261,9 @@ func completer(d prompt.Document) []prompt.Suggest {
 
 func commandSuggestions(cmd *cobra.Command) []prompt.Suggest {
 	suggestions := []prompt.Suggest{}
+	skippedCmds := []string{"completion", "console"}
 	for _, sub := range cmd.Commands() {
-		if !sub.IsAvailableCommand() || sub.Hidden {
+		if !sub.IsAvailableCommand() || sub.Hidden || slices.Contains(skippedCmds, sub.Name()) {
 			continue
 		}
 		suggestions = append(suggestions, prompt.Suggest{
