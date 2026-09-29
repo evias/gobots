@@ -21,6 +21,7 @@ var (
 	useRobot *robot.Robot
 )
 
+// TODO(evias): hostOrDriver is currently unset when running `gobots exec`.
 // TODO(evias): Usage of the exec command should return commands by driver.
 // TODO(evias): Flags suggestions should contain command fields/params from driver.
 func NewCmdExec() *cobra.Command {

@@ -23,18 +23,35 @@ files and the Wire messaging format.
 
 ## Usage
 
-A terminal user interface is provided with following commands:
+A terminal user interface is provided with an interactive console to connect
+directly with edge devices and execute commands:
 
 ```bash
-# Connect to a device using a driver file
-$ gobots connect drivers/ELEGOO/smartcar-v4.yaml
+# Open an interactive console to a device using a driver file
+$ gobots console drivers/ELEGOO/smartcar-v4.yaml
 
-# Connect to a device using a custom host and port
-$ gobots connect 192.168.4.1:100 -d drivers/ELEGOO/smartcar-v4.yaml
+# Open an interactive console to a device using a custom host and port
+$ gobots console 192.168.4.1:100 -d drivers/ELEGOO/smartcar-v4.yaml
+
+# Execute commands with parameters from the console directly
+bot> exec move --speed 10 --direction forward
+bot> exec stop
+```
+
+Connect and execute commands directly with `gobots exec`:
+
+```bash
+$ gobots exec move --speed 10 --direction forward -d drivers/ELEGOO/smartcar-v4.yaml
+```
+
+Execute runnable flows with `gobots run`:
+
+```bash
+$ gobots run flows/ELEGOO/smartcar-v4/parking.yaml
 ```
 
 ## License
 
-Copyright 2025 Grégory Saive <greg@evi.as> for re:Software S.L. (resoftware.es).
+Copyright 2025-2026 Grégory Saive <greg@evi.as> for re:Software S.L. (resoftware.es).
 
 Licensed under the [3-Clause BSD License](./LICENSE).
