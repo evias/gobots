@@ -35,7 +35,9 @@ type TCPTransport struct {
 	logger *slog.Logger
 
 	mtx    *sync.Mutex
-	conn   net.Conn // under mtx
+	conn   net.Conn      // under mtx
+	reader *bufio.Reader // under mtx
+	writer *bufio.Writer // under mtx
 	dialFn DialFunc
 }
 
@@ -184,6 +186,8 @@ func (tcpt *TCPTransport) Open() error {
 	defer tcpt.mtx.Unlock()
 
 	tcpt.conn = conn
+	tcpt.reader = bufio.NewReader(conn)
+	tcpt.writer = bufio.NewWriter(conn)
 	return nil
 }
 
@@ -196,6 +200,8 @@ func (tcpt *TCPTransport) Close() error {
 		return nil // conn already closed
 	}
 
+	tcpt.reader = nil
+	tcpt.writer = nil
 	return tcpt.conn.Close()
 }
 
@@ -203,16 +209,28 @@ func (tcpt *TCPTransport) Close() error {
 func (tcpt *TCPTransport) Read(
 	bytes []byte,
 ) (int, error) {
-	conn := tcpt.Conn()
-	stream := bufio.NewReader(conn)
+	tcpt.mtx.Lock()
+	defer tcpt.mtx.Unlock()
 
-	return stream.Read(bytes)
+	if tcpt.reader == nil {
+		return 0, net.ErrClosed
+	}
+	return tcpt.reader.Read(bytes)
 }
 
 // Write sends bytes to the stream, p must be pre-allocated.
 func (tcpt *TCPTransport) Write(p []byte) (int, error) {
-	conn := tcpt.Conn()
-	stream := bufio.NewWriter(conn)
+	tcpt.mtx.Lock()
+	defer tcpt.mtx.Unlock()
 
-	return stream.Write(p)
+	if tcpt.writer == nil {
+		return 0, net.ErrClosed
+	}
+	if _, err := tcpt.writer.Write(p); err != nil {
+		return 0, err
+	}
+	if err := tcpt.writer.Flush(); err != nil {
+		return 0, err
+	}
+	return len(p), nil
 }

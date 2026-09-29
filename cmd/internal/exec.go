@@ -90,8 +90,17 @@ func NewCmdExec() *cobra.Command {
 				return err
 			}
 
-			slog.Debug(fmt.Sprintf("Execution done successfully for %s", command))
+			time.Sleep(1 * time.Second)
 
+			// Send automatic stop message.
+			// XXX should use configurable duration with sensible default.
+			stopMessage := driver.WireConfig("stop", nil)
+			if err := useRobot.Send(botfile.NewMessage(stopMessage), nil); err != nil {
+				slog.Error(fmt.Sprintf("failed to send stop command: %s", err.Error()))
+				return err
+			}
+
+			slog.Debug(fmt.Sprintf("Execution done successfully for %s", command))
 			time.Sleep(5 * time.Second)
 			return nil
 		},

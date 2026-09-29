@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -236,15 +237,12 @@ func (r *Robot) Send(msg botfile.Message, args any) error {
 		}
 	}
 
-	// Before sending a message, make sure we send a heartbeat.
-	r.checkSendHeartbeat()
-
 	// Populate text/template fields using args, e.g. `{{.Speed}}`.
 	bzSent, err := msg.ToBytes(args)
 	if err != nil {
 		return fmt.Errorf("failed to format message: %w", err)
 	}
-	bzSent = append(bzSent, byte('\n')) // XXX end-of-frame from driver
+	//bzSent = append(bzSent, byte('\n')) // XXX end-of-frame from driver
 
 	// Write to open transport stream.
 	num, err := r.connTransport.Write(bzSent)
@@ -319,10 +317,12 @@ func (r *Robot) receiveRoutine(connCtx context.Context) {
 		}
 
 		bz := bytes[:num]
-		r.logger.Debug(fmt.Sprintf("[<-  IN] %s", string(bz)), "num", num, "from", r.hostWithPort)
+		r.logger.Debug(fmt.Sprintf("[<-  IN] %s", string(bz)),
+			"num", num,
+			"from", r.connTransport.Addr())
 
 		// Received heartbeat command request, send heartbeat response.
-		if string(bz) == "{Heartbeat}" {
+		if strings.TrimSpace(string(bz)) == "{Heartbeat}" {
 			r.lastHeartbeatRecvTime.Store(time.Now().UnixNano())
 			r.checkSendHeartbeat()
 		}
@@ -335,6 +335,8 @@ func (r *Robot) receiveRoutine(connCtx context.Context) {
 // sendHeartbeat formats a heartbeat [botfile.Wire] message and sends it.
 // Skipped when no heartbeat command is configured.
 // Returns an error given an unsuccessful message sending operation.
+//
+// TODO(evias): End-of-frame byte(s) should be read from driver.
 func (r *Robot) checkSendHeartbeat() error {
 	if !r.driver.HasCommand("heartbeat") {
 		return nil
@@ -350,6 +352,7 @@ func (r *Robot) checkSendHeartbeat() error {
 		if err != nil {
 			return fmt.Errorf("failed to format heartbeat message: %w", err)
 		}
+		//bzHeartbeat = append(bzHeartbeat, byte('\n')) // XXX end-of-frame from driver
 
 		// Write to open transport stream.
 		if _, err := r.connTransport.Write(bzHeartbeat); err != nil {
@@ -364,6 +367,11 @@ func (r *Robot) checkSendHeartbeat() error {
 		}
 
 		r.lastHeartbeatSendTime.Store(time.Now().UnixNano())
+
+		r.logger.Debug(fmt.Sprintf("[-> OUT] %s", bzHeartbeat),
+			"len", len(bzHeartbeat),
+			"num", len(bzHeartbeat),
+			"to", r.hostWithPort)
 	}
 
 	return nil
