@@ -3,7 +3,6 @@ package botfile
 import (
 	"fmt"
 	"os"
-	"reflect"
 
 	"github.com/goccy/go-yaml"
 )
@@ -35,8 +34,8 @@ type Driver interface {
 	// FieldType should return the type of a field by name,
 	// e.g. "string", "number" or "duration".
 	FieldType(name string) string
-	// FieldDefault should return the field's default value as a [reflect.Value].
-	FieldDefault(name string) reflect.Value
+	// FieldDefault should return the field's default value as a native type.
+	FieldDefault(name string) interface{}
 
 	// CommandConfig should return a [CommandConfig] for a command name.
 	CommandConfig(command string) CommandConfig
@@ -136,12 +135,10 @@ func (drv *robotDriver) FieldType(name string) string {
 	return field.Type
 }
 
-// FieldDefault returns the field's default value as a [reflect.Value].
-func (drv *robotDriver) FieldDefault(name string) reflect.Value {
-	defaultValue := reflect.New(reflect.TypeOf([]byte{}))
-	defaultValue.SetBytes([]byte{})
+// FieldDefault returns the field's default value as a native type.
+func (drv *robotDriver) FieldDefault(name string) interface{} {
 	if !drv.HasField(name) {
-		return defaultValue
+		return []byte{}
 	}
 
 	f := drv.conf.Fields[name]
@@ -149,38 +146,24 @@ func (drv *robotDriver) FieldDefault(name string) reflect.Value {
 
 	switch {
 	case ft == "binary":
-		v := reflect.New(reflect.TypeOf([]byte{}))
-		bz, ok := f.Default.([]byte)
-		if !ok {
-			v.SetBytes([]byte{})
-			return v
-		}
-		v.SetBytes(bz)
-		return v
+		return []byte{}
 	case ft == "string":
-		v := reflect.New(reflect.TypeOf(string("")))
 		str, ok := f.Default.(string)
 		if !ok {
-			v.SetString("")
-			return v
+			return ""
 		}
-		v.SetString(str)
-		return v
+		return str
 	case ft == "number":
-		v := reflect.New(reflect.TypeOf(float64(0)))
 		i, ok := f.Default.(float64)
 		if !ok {
-			v.SetFloat(0.0)
-			return v
+			return float64(0)
 		}
-		v.SetFloat(i)
-		return v
-
+		return i
 		// XXX case ft == "duration" should recognize e.g. "5s".
 	}
 
 	// Fallback to empty slice of bytes.
-	return defaultValue
+	return []byte{}
 }
 
 // CommandConfig returns a [CommandConfig] object by name.
@@ -209,34 +192,6 @@ func (drv *robotDriver) WireConfig(command string, args any) WireConfig {
 	}
 
 	cmd := drv.conf.Commands[command]
-	v := reflect.ValueOf(args)
-
-	// Make sure we have all fields (required).
-	for _, field := range cmd.Fields {
-		a := v.FieldByName(field)
-		t := reflect.TypeOf(a)
-
-		// If we are missing a field, fill with default.
-		if a == reflect.Zero(t) {
-			a.Set(drv.FieldDefault(field))
-		}
-	}
-
-	// Encode the content of params, i.e. "forward" becomes 1.
-	for param, paramValues := range cmd.Params {
-		if len(paramValues) == 0 {
-			continue
-		}
-
-		a := v.FieldByName(string(param))
-
-		for pvn, pv := range paramValues {
-			if a.String() == string(pvn) {
-				a.Set(reflect.ValueOf(pv))
-			}
-		}
-	}
-
 	wireTypes := []string{
 		"binary",
 		"string",

@@ -25,10 +25,13 @@ type DriverConfig struct {
 // FieldConfig describes configuration fields that may be required for the
 // execution of commands, e.g. a "speed" field for the "move" command.
 //
-// TODO(evias): Some fields require "min", "max" fields, others TBI?
+// Min/Max fields use a pointer to permit distinguishing between 0-value
+// and nil (not present), notably during marshaling/unmarshaling.
 type FieldConfig struct {
-	Type    string `yaml:"type"`
-	Default any    `yaml:"default"`
+	Type    string   `yaml:"type"`
+	Default any      `yaml:"default"`
+	Min     *float64 `yaml:"min,omitempty"`
+	Max     *float64 `yaml:"max,omitempty"`
 }
 
 // ConnectionConfig describes connection options for a particular device.

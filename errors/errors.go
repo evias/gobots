@@ -15,6 +15,7 @@ const (
 	ErrNotConnected      ErrorCode = "NOT_CONNECTED"
 	ErrUnknownTransport  ErrorCode = "UNKNOWN_TRANSPORT_TYPE"
 	ErrWriteFailure      ErrorCode = "WRITE_FAILURE"
+	ErrHeartbeatFailure  ErrorCode = "HEARTBEAT_FAILURE"
 	ErrInternal          ErrorCode = "INTERNAL_ERROR"
 )
 

@@ -94,7 +94,7 @@ func New(
 	autoDisconnectAfter := r.autoDisconnectAfter.Load()
 	if autoDisconnectAfter != int64(0) {
 		// auto-disconnect never exceeds max connectivity ("keep-alive").
-		r.ctx, r.cancelCtx = context.WithTimeout(context.Background(), time.Duration(r.autoDisconnectAfter.Load()))
+		r.ctx, r.cancelCtx = context.WithTimeout(context.Background(), time.Duration(autoDisconnectAfter)*time.Second)
 	} else {
 		r.ctx = context.Background()
 	}
@@ -160,10 +160,7 @@ func (r *Robot) Transport() apiconn.Transport {
 func (r *Robot) Connect(
 	conf botfile.ConnectionConfig,
 ) error {
-	r.mtx.Lock()
 	transport := apiconn.NewTransport(conf)
-	r.mtx.Unlock()
-
 	if err := transport.Open(); err != nil {
 		return &apierr.AppError{
 			Code:    apierr.ErrInvalidConnection,
@@ -181,9 +178,9 @@ func (r *Robot) Connect(
 	r.logger.Info(fmt.Sprintf("Connected to host %s", r.hostWithPort))
 
 	// Robot is responsible for the receiving routine which listens to messages
-	// from an connected peer. This routine continuously reads messages until
+	// from a connected peer. This routine continuously reads messages until
 	// the context expires or gets cancelled.
-	go r.receiveRoutine(r.ctx, transport)
+	go r.receiveRoutine(r.ctx)
 	return nil
 }
 
@@ -216,7 +213,11 @@ func (r *Robot) Disconnect() error {
 
 // IsConnected returns true given an existing opened [net.Conn] and [apiconn.Transport].
 func (r *Robot) IsConnected() bool {
-	return r.connTransport != nil && r.connTransport.Conn() != nil
+	r.mtx.Lock()
+	transport := r.connTransport
+	r.mtx.Unlock()
+
+	return transport != nil && transport.Conn() != nil
 }
 
 // Send attempts to send a [botfile.Message] to a connected device.
@@ -225,22 +226,27 @@ func (r *Robot) IsConnected() bool {
 //
 // Send implements IRobot.
 //
-// TODO(evias): Check for presence of EOF byte before sending.
+// TODO(evias): End-of-frame byte(s) should be read from driver.
 func (r *Robot) Send(msg botfile.Message, args any) error {
 	if r.ctx.Err() != nil || !r.IsConnected() {
 		return &apierr.AppError{
 			Code:    apierr.ErrNotConnected,
 			Message: "Failed to send message",
-			Cause:   nil,
+			Cause:   r.ctx.Err(),
 		}
 	}
 
+	// Before sending a message, make sure we send a heartbeat.
+	r.checkSendHeartbeat()
+
+	// Populate text/template fields using args, e.g. `{{.Speed}}`.
 	bzSent, err := msg.ToBytes(args)
 	if err != nil {
 		return fmt.Errorf("failed to format message: %w", err)
 	}
-	bzSent = append(bzSent, byte('\n')) // XXX extract EOF byte
+	bzSent = append(bzSent, byte('\n')) // XXX end-of-frame from driver
 
+	// Write to open transport stream.
 	num, err := r.connTransport.Write(bzSent)
 	if err != nil {
 		r.logger.Error(fmt.Sprintf("Error sending bytes to %s", r.hostWithPort),
@@ -253,7 +259,10 @@ func (r *Robot) Send(msg botfile.Message, args any) error {
 		}
 	}
 
-	r.logger.Debug(fmt.Sprintf("[-> OUT] %v", string(bzSent)), "num", num, "to", r.hostWithPort)
+	r.logger.Debug(fmt.Sprintf("[-> OUT] %s", bzSent),
+		"len", len(bzSent),
+		"num", num,
+		"to", r.hostWithPort)
 	return nil
 }
 
@@ -270,8 +279,8 @@ func (r *Robot) Send(msg botfile.Message, args any) error {
 // TODO(evias): Read buffer size may be overwritten by driver.
 // TODO(evias): Heartbeat frequence may be overwritten by driver.
 // TODO(evias): Disconnect concurrency, disconnect should be graceful.
-func (r *Robot) receiveRoutine(connCtx context.Context, transport apiconn.Transport) {
-	if connCtx.Err() != nil || transport.Conn() == nil {
+func (r *Robot) receiveRoutine(connCtx context.Context) {
+	if connCtx.Err() != nil || r.connTransport.Conn() == nil {
 		return
 	}
 
@@ -282,29 +291,11 @@ func (r *Robot) receiveRoutine(connCtx context.Context, transport apiconn.Transp
 	}()
 
 	for connCtx.Err() == nil {
+		// Check if we must send a heartbeat, i.e. heartbeat frequency.
+		r.checkSendHeartbeat()
+
 		bytes := make([]byte, DefaultReadBufferSize) // XXX bufferSize from driver
 		num, err := r.connTransport.Read(bytes)
-
-		if num == 0 {
-			// Check if we must send a heartbeat, i.e. heartbeat frequency.
-			if r.driver.HasCommand("heartbeat") {
-				elapsedSinceLast := time.Now().UnixNano() - r.lastHeartbeatSendTime.Load()
-				if elapsedSinceLast >= 1e6*DefaultHeartbeatDurationMs { // XXX heartbeat frequence from driver
-					if err := r.sendHeartbeat(); err != nil {
-						r.logger.Error(fmt.Sprintf("Error sending heartbeat to %s", r.hostWithPort),
-							"err", err,
-						)
-						return
-					}
-				}
-			}
-
-			// Otherwise relax a little... then read again.
-			if ok := r.sleepOrQuit(connCtx, DefaultReceiveWaitPeriod); !ok {
-				return
-			}
-			continue // to read
-		}
 
 		if err != nil && errors.Is(err, io.EOF) {
 			if ok := r.sleepOrQuit(connCtx, DefaultReceiveWaitPeriod); !ok {
@@ -318,13 +309,22 @@ func (r *Robot) receiveRoutine(connCtx context.Context, transport apiconn.Transp
 			return
 		}
 
+		// If nothing was read.
+		if num == 0 {
+			// Otherwise relax a little... then read again.
+			if ok := r.sleepOrQuit(connCtx, DefaultReceiveWaitPeriod); !ok {
+				return
+			}
+			continue // to read
+		}
+
 		bz := bytes[:num]
 		r.logger.Debug(fmt.Sprintf("[<-  IN] %s", string(bz)), "num", num, "from", r.hostWithPort)
 
 		// Received heartbeat command request, send heartbeat response.
 		if string(bz) == "{Heartbeat}" {
 			r.lastHeartbeatRecvTime.Store(time.Now().UnixNano())
-			r.sendHeartbeat()
+			r.checkSendHeartbeat()
 		}
 	}
 }
@@ -335,17 +335,37 @@ func (r *Robot) receiveRoutine(connCtx context.Context, transport apiconn.Transp
 // sendHeartbeat formats a heartbeat [botfile.Wire] message and sends it.
 // Skipped when no heartbeat command is configured.
 // Returns an error given an unsuccessful message sending operation.
-func (r *Robot) sendHeartbeat() error {
+func (r *Robot) checkSendHeartbeat() error {
 	if !r.driver.HasCommand("heartbeat") {
 		return nil
 	}
 
-	heartbeatCmd := r.driver.WireConfig("heartbeat", nil)
-	if err := r.Send(botfile.NewMessage(heartbeatCmd), nil); err != nil {
-		return err
+	elapsedSinceLast := time.Now().UnixNano() - r.lastHeartbeatSendTime.Load()
+	if elapsedSinceLast >= 1e6*DefaultHeartbeatDurationMs { // XXX heartbeat frequency from driver
+		heartbeatCmd := r.driver.WireConfig("heartbeat", nil)
+		heartbeatMsg := botfile.NewMessage(heartbeatCmd)
+
+		// Format heartbeat command message using Wire format, no args.
+		bzHeartbeat, err := heartbeatMsg.ToBytes(nil)
+		if err != nil {
+			return fmt.Errorf("failed to format heartbeat message: %w", err)
+		}
+
+		// Write to open transport stream.
+		if _, err := r.connTransport.Write(bzHeartbeat); err != nil {
+			r.logger.Error(fmt.Sprintf("Error sending heartbeat bytes to %s", r.hostWithPort),
+				"err", err,
+			)
+			return &apierr.AppError{
+				Code:    apierr.ErrHeartbeatFailure,
+				Message: "Failed to send heartbeat",
+				Cause:   err,
+			}
+		}
+
+		r.lastHeartbeatSendTime.Store(time.Now().UnixNano())
 	}
 
-	r.lastHeartbeatSendTime.Store(time.Now().UnixNano())
 	return nil
 }
 

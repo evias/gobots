@@ -16,24 +16,20 @@ import (
 	"golang.org/x/term"
 
 	"github.com/evias/gobots/botfile"
-	"github.com/evias/gobots/robot"
 )
 
 var (
-	hostOrDriver  string
-	useOffline    bool
-	enableConnect bool
-	shellParser   = shellwords.NewParser()
+	hostOrDriver string
+	shellParser  = shellwords.NewParser()
 )
 
 func NewCmdConsole() *cobra.Command {
 	consoleCmd := &cobra.Command{
 		Use:   "console <host> [options]",
-		Short: "Connect to gobots with your botfiles and open an interactive console.",
+		Short: "Open an interactive console to gobots with your botfiles.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			hostOrDriver = args[0]
-			enableConnect = !useOffline
 
 			// --debug enables debug messages in default logger.
 			logLevel := new(slog.LevelVar)
@@ -64,21 +60,6 @@ func NewCmdConsole() *cobra.Command {
 			slog.Debug(fmt.Sprintf("Driver: %s", driverFile))
 			slog.Debug(fmt.Sprintf("Host: %s", driver.Host()))
 			slog.Debug(fmt.Sprintf("Port: %d", driver.Port()))
-
-			robot := robot.New(driver)
-			slog.Info(fmt.Sprintf("Using gobots driver: %s", robot.Name()))
-
-			if connAttempts > 0 && connAttempts != int(driver.Config().Connection.MaxAttempts) {
-				botfile.WithMaxAttempts(uint16(connAttempts))(driver)
-			}
-
-			if enableConnect {
-				if err := robot.Connect(driver.Config().Connection); err != nil {
-					slog.Error(fmt.Sprintf("failed to connect with gobot: %s", err.Error()))
-					return err
-				}
-				defer robot.Disconnect()
-			}
 
 			// Restore terminal state in teardown process.
 			defer term.Restore(fd, oldState)
@@ -113,12 +94,8 @@ func NewCmdConsole() *cobra.Command {
 
 	consoleCmd.Flags().StringVarP(&driverFile, "driver", "d", defaultDriver,
 		"The gobots driver file for your robot (optional).")
-	consoleCmd.Flags().IntVarP(&connAttempts, "attempts", "a", 3,
-		"The connection tries round, in case connection does not succeed (optional).")
 	consoleCmd.Flags().BoolVarP(&enableDebug, "debug", "D", false,
 		"Sets whether to enable debug mode/logs or not (optional).")
-	consoleCmd.Flags().BoolVarP(&useOffline, "offline", "O", false,
-		"Sets whether to enable offline mode, i.e. no connection (optional).")
 
 	return consoleCmd
 }

@@ -4,17 +4,25 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strconv"
 	"strings"
+	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/spf13/cobra"
 
 	"github.com/evias/gobots/botfile"
+	"github.com/evias/gobots/robot"
 )
 
 var (
-	command string
+	command  string
+	useRobot *robot.Robot
 )
 
+// TODO(evias): Usage of the exec command should return commands by driver.
+// TODO(evias): Flags suggestions should contain command fields/params from driver.
 func NewCmdExec() *cobra.Command {
 	execCmd := &cobra.Command{
 		Use:   "exec <command> [options]",
@@ -42,6 +50,10 @@ func NewCmdExec() *cobra.Command {
 				return err
 			}
 
+			if connAttempts > 0 && connAttempts != int(driver.Config().Connection.MaxAttempts) {
+				botfile.WithMaxAttempts(uint16(connAttempts))(driver)
+			}
+
 			if command == "help" || !driver.HasCommand(command) {
 				cmd.Usage()
 				return nil
@@ -50,12 +62,36 @@ func NewCmdExec() *cobra.Command {
 			slog.Debug(fmt.Sprintf("Driver: %s", driverFile))
 			slog.Debug(fmt.Sprintf("Host: %s", driver.Host()))
 			slog.Debug(fmt.Sprintf("Port: %d", driver.Port()))
-			slog.Debug(fmt.Sprintf("Command: %s", command))
 
 			// e.g. everything after "move" in: `gobots exec move --speed=10`
-			cmdArgs := os.Args[3:]
-			slog.Debug(fmt.Sprintf("os.Args: %v", cmdArgs))
+			dataArgs := os.Args[3:]
+			commandArgv := command + " " + strings.Join(dataArgs, " ")
+			slog.Debug(fmt.Sprintf("Command: %s", commandArgv))
 
+			// TODO(evias): use device differenciation and/or better state transitions for subcommands.
+			// Now connect to the edge device using the driver configuration.
+			useRobot = robot.New(driver)
+			if err := useRobot.Connect(driver.Config().Connection); err != nil {
+				slog.Error(fmt.Sprintf("failed to connect with gobot: %s", err.Error()))
+				return err
+			}
+			defer useRobot.Disconnect()
+
+			time.Sleep(3 * time.Second)
+
+			// Convert the command arguments to an actual [botfile.Message].
+			wireMessage := driver.WireConfig(command, nil)
+			messageArgs := parseDataArgs(driver, command, dataArgs)
+
+			// Underlying call to [botfile.Message#ToBytes] fills template with messageArgs.
+			if err := useRobot.Send(botfile.NewMessage(wireMessage), messageArgs); err != nil {
+				slog.Error(fmt.Sprintf("failed to send '%s' command: %s", command, err.Error()))
+				return err
+			}
+
+			slog.Debug(fmt.Sprintf("Execution done successfully for %s", command))
+
+			time.Sleep(5 * time.Second)
 			return nil
 		},
 	}
@@ -72,4 +108,109 @@ func NewCmdExec() *cobra.Command {
 		"Sets whether to enable debug mode/logs or not (optional).")
 
 	return execCmd
+}
+
+// -----------------------------------------------------------------------------
+// Parser — parses custom data arguments passed to gobots driver commands.
+// -----------------------------------------------------------------------------
+
+func upperFirst(s string) string {
+	if s == "" {
+		return s
+	}
+	r, i := utf8.DecodeRuneInString(s)
+	return string(unicode.ToUpper(r)) + s[i:]
+}
+
+// sliceToMap converts a slice of bash-style arguments, e.g. "--speed", into a
+// key-value map with string keys and values.
+func sliceToMap(args []string) map[string]string {
+	m := make(map[string]string)
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--" {
+			// detects --, but nothing to do
+			continue
+		}
+		if strings.HasPrefix(args[i], "--") {
+			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "--") {
+				m[args[i]] = args[i+1]
+				i++ // consume the value
+			} else if i+1 < len(args) && strings.Contains(args[i], "=") {
+				nv := strings.SplitN(args[i], "=", 2)
+				m[nv[0]] = nv[1]
+			} else {
+				m[args[i]] = "" // flag with no value (or boolean-style flag)
+			}
+		}
+	}
+	return m
+}
+
+// parseDataArgs parses data arguments, typically passed through os.Args in a
+// format similar to e.g. `--speed 10` or `--direction=forward`.
+//
+// Returns a map[string]string with keys from [botfile.CommandConfig#Fields]
+// and [botfile.CommandConfig#Params].
+func parseDataArgs(
+	driver botfile.Driver,
+	command string,
+	args []string,
+) (data map[string]string) {
+	wireCommand := driver.Config().Commands[command]
+
+	// v contains "--sleep", "--direction" keys.
+	v := sliceToMap(args)
+
+	// data contains "sleep", "direction" keys.
+	data = make(map[string]string, len(args))
+
+	// Make sure we have all fields (required).
+	for _, field := range wireCommand.Fields {
+		f := "--" + strings.ToLower(field)
+		a, ok := v[f]
+
+		// Golang text/template expects uppercase-first keys.
+		key := upperFirst(field)
+
+		data[key] = ""
+		if ok {
+			data[key] = a
+		}
+	}
+
+	// Encode the content of params, i.e. "forward" becomes 1.
+	// Empty/Non-present parameters are ignored (optional).
+	for param, paramValues := range wireCommand.Params {
+		if len(paramValues) == 0 {
+			continue
+		}
+
+		p := "--" + strings.ToLower(string(param))
+		a, ok := v[string(p)]
+		if !ok {
+			continue
+		}
+
+		// Golang text/template expects uppercase-first keys.
+		key := upperFirst(string(param))
+
+		for pvn, pv := range paramValues {
+			if a != string(pvn) {
+				continue
+			}
+
+			if v, ok := pv.(uint64); ok {
+				data[key] = strconv.FormatUint(v, 10)
+				break
+			} else if v, ok := pv.(int); ok {
+				data[key] = strconv.Itoa(v)
+				break
+			} else if v, ok := pv.(string); ok {
+				data[key] = v
+				break
+			}
+		}
+	}
+
+	return /* data */
 }
