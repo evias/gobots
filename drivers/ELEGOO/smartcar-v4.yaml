@@ -1,0 +1,74 @@
+name: "ELEGOO SmartCar V4"
+brand: ELEGOO
+repository: "https://github.com/elegooofficial/ELEGOO-Smart-Robot-Car-Kit-V4.0"
+fields:
+  angle:
+    type: number
+    min: 0
+    max: 180
+    default: 90
+  speed:
+    type: number
+    min: 0
+    max: 150
+    default: 50
+  duration:
+    type: duration
+    default: 3s
+setup:
+shutdown:
+  - stop
+connection:
+  type: tcp
+  host: "192.168.4.1"
+  port: 100
+  heartbeat:
+    command: heartbeat
+    frequence: 1000ms
+commands:
+  heartbeat:
+    wire:
+      string:
+        format: '{Heartbeat}'
+  stop:
+    wire:
+      string:
+        format: '{"N":102,"D1":9,"D2":0}'
+  move:
+    fields:
+      - speed
+    params:
+      direction:
+        forward: 1
+        forwardLeft: 5
+        forwardRight: 7
+        backward: 2
+        backwardLeft: 6
+        backwardRight: 8
+    wire:
+      string:
+        format: '{"N":102,"D1":{{.Direction}},"D2":{{.Speed}}}'
+  turn:
+    fields:
+      - speed
+    params:
+      direction:
+        left: 3
+        right: 4
+    wire:
+      string:
+        format: '{"N":102,"D1":{{.Direction}},"D2":{{.Speed}}}'
+  camera_center:
+    fields:
+      - angle
+    wire:
+      string:
+        format: '{"N":5,"D1":1,"D2":{{.Angle}}}'
+  camera_turn:
+    params:
+      direction:
+        left: 3
+        right: 4
+    wire:
+      string:
+        format: '{"N":106,"D1":{{.Direction}}}'
