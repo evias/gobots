@@ -2,25 +2,27 @@ package conn
 
 import (
 	"context"
-	"net"
+	"io"
 )
+
+type Socket interface {
+	io.ReadWriteCloser
+}
 
 // DialFunc defines the predicate for dialer functions around a context, network
 // and address. For more details around parameters: [net.Dialer#DialContext].
-type DialFunc func(ctx context.Context, network, address string) (net.Conn, error)
+type DialFunc func(ctx context.Context, network, address string) (Socket, error)
 
 // Transport defines the contract for robot connection wrappers.
 type Transport interface {
 	// Type should return the transport type, e.g. "tcp", "serial", "ble".
 	Type() string
 
-	// Dialer should return a dial function, or [net.Dialer#DialContext]
-	Dialer() DialFunc
+	// Socket should return the opened socket instance, see io.ReadWriteCloser.
+	Socket() Socket
 
 	// Addr should return the remote address or nil, i.e. [net.Conn#RemoteAddr].
-	Addr() net.Addr
-	// Conn should return a [net.Conn] instance or nil.
-	Conn() net.Conn
+	Addr() string
 
 	// Open should dial the remote address, i.e. connect to the remote.
 	Open() error

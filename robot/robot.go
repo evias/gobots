@@ -63,7 +63,7 @@ type Robot struct {
 	// Connection (Guarded)
 	mtx           *sync.Mutex
 	hostWithPort  string
-	remoteAddress net.Addr
+	remoteAddress string
 	connTransport apiconn.Transport
 }
 
@@ -218,7 +218,7 @@ func (r *Robot) IsConnected() bool {
 	transport := r.connTransport
 	r.mtx.Unlock()
 
-	return transport != nil && transport.Conn() != nil
+	return transport != nil
 }
 
 // Send attempts to send a [botfile.Message] to a connected device.
@@ -242,7 +242,6 @@ func (r *Robot) Send(msg botfile.Message, args any) error {
 	if err != nil {
 		return fmt.Errorf("failed to format message: %w", err)
 	}
-	//bzSent = append(bzSent, byte('\n')) // XXX end-of-frame from driver
 
 	// Write to open transport stream.
 	num, err := r.connTransport.Write(bzSent)
@@ -278,7 +277,7 @@ func (r *Robot) Send(msg botfile.Message, args any) error {
 // TODO(evias): Heartbeat frequence may be overwritten by driver.
 // TODO(evias): Disconnect concurrency, disconnect should be graceful.
 func (r *Robot) receiveRoutine(connCtx context.Context) {
-	if connCtx.Err() != nil || r.connTransport.Conn() == nil {
+	if connCtx.Err() != nil {
 		return
 	}
 
@@ -352,7 +351,6 @@ func (r *Robot) checkSendHeartbeat() error {
 		if err != nil {
 			return fmt.Errorf("failed to format heartbeat message: %w", err)
 		}
-		//bzHeartbeat = append(bzHeartbeat, byte('\n')) // XXX end-of-frame from driver
 
 		// Write to open transport stream.
 		if _, err := r.connTransport.Write(bzHeartbeat); err != nil {

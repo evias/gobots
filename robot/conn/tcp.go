@@ -92,6 +92,11 @@ func (*TCPTransport) Type() string {
 	return "tcp"
 }
 
+// Socket should return the opened socket instance, see io.ReadWriteCloser.
+func (tcpt *TCPTransport) Socket() Socket {
+	return tcpt.Conn()
+}
+
 // Dialer should return a dial function, or [net.Dialer#DialContext]
 func (tcpt *TCPTransport) Dialer() DialFunc {
 	// use custom dialer process as injected
@@ -99,20 +104,23 @@ func (tcpt *TCPTransport) Dialer() DialFunc {
 		return tcpt.dialFn
 	}
 
-	// fallback to net.Dialer implementation
-	return (&net.Dialer{
-		Timeout: DefaultConnectionTimeoutMs * time.Millisecond,
-	}).DialContext
+	// fallback to [net.Dialer#DialContext] implementation
+	return func(ctx context.Context, network, addr string) (Socket, error) {
+		// returns (net.Conn, error)
+		return (&net.Dialer{
+			Timeout: DefaultConnectionTimeoutMs * time.Millisecond,
+		}).DialContext(ctx, network, addr)
+	}
 }
 
 // Addr returns the remote address or nil, i.e. [net.Conn#RemoteAddr].
-func (tcpt *TCPTransport) Addr() net.Addr {
+func (tcpt *TCPTransport) Addr() string {
 	conn := tcpt.Conn()
 	if conn == nil {
-		return nil
+		return ""
 	}
 
-	return conn.RemoteAddr()
+	return conn.RemoteAddr().String()
 }
 
 // Conn returns a [net.Conn] instance or nil.
@@ -145,6 +153,7 @@ func (tcpt *TCPTransport) Open() error {
 	var (
 		hostWithPort = tcpt.String()
 		dialerFn     = tcpt.Dialer()
+		socket       Socket
 		conn         net.Conn
 		err          error
 	)
@@ -160,10 +169,11 @@ func (tcpt *TCPTransport) Open() error {
 
 		// XXX dialerFn should be called in a goroutine to avoid blocking main thread.
 		// XXX Synchronicity of the [net.Dialer#DialContext] calls must be kept.
-		conn, err = dialerFn(dialCtx, "tcp", hostWithPort)
+		socket, err = dialerFn(dialCtx, "tcp", hostWithPort)
 		cancelFn() // cancel context directly after sync-call of dialer func
 
 		if err == nil {
+			conn = socket.(net.Conn)
 			break
 		}
 

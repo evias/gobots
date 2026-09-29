@@ -47,6 +47,14 @@ type ConnectionConfig struct {
 	TimeoutMs   uint32           `yaml:"timeout"`
 }
 
+// SerialConfig describes connection options for a serial port connection.
+type SerialConfig struct {
+	BaudRate uint32 `yaml:"baud_rate"`
+	Parity   uint8  `yaml:"parity"`
+	DataBits uint8  `yaml:"data_bits"`
+	StopBits uint8  `yaml:"stop_bits"`
+}
+
 // CommandFrequency describe the interval between each Command execution.
 // The frequency field contains a [time.Duration]
 type CommandFrequency struct {

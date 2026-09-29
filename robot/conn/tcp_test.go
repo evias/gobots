@@ -47,7 +47,7 @@ func TestTCPTransport_OpenClose(t *testing.T) {
 	tcpt := NewTCPTransport(botfile.ConnectionConfig{
 		Host: "localhost",
 		Port: 1234,
-	}, WithDialer(func(ctx context.Context, network, addr string) (net.Conn, error) {
+	}, WithDialer(func(ctx context.Context, network, addr string) (Socket, error) {
 		if addr != "localhost:1234" {
 			t.Fatalf("unexpected addr %q", addr)
 		}
@@ -56,7 +56,7 @@ func TestTCPTransport_OpenClose(t *testing.T) {
 
 	openErr := tcpt.Open()
 	assert.NoError(t, openErr)
-	assert.NotNil(t, tcpt.Conn(), "should set conn instance")
+	assert.NotNil(t, tcpt.(*TCPTransport).Conn(), "should set conn instance")
 
 	closeErr := tcpt.Close()
 	assert.NoError(t, closeErr)
@@ -71,7 +71,7 @@ func TestTCPTransport_Write(t *testing.T) {
 	tcpt := NewTCPTransport(botfile.ConnectionConfig{
 		Host: "localhost",
 		Port: 1234,
-	}, WithDialer(func(ctx context.Context, network, addr string) (net.Conn, error) {
+	}, WithDialer(func(ctx context.Context, network, addr string) (Socket, error) {
 		assert.Equalf(t, "localhost:1234", addr, "unexpected addr %q", addr)
 		return client, nil
 	}))
@@ -104,7 +104,7 @@ func TestTCPTransport_Read(t *testing.T) {
 	tcpt := NewTCPTransport(botfile.ConnectionConfig{
 		Host: "localhost",
 		Port: 1234,
-	}, WithDialer(func(ctx context.Context, network, addr string) (net.Conn, error) {
+	}, WithDialer(func(ctx context.Context, network, addr string) (Socket, error) {
 		assert.Equalf(t, "localhost:1234", addr, "unexpected addr %q", addr)
 		return client, nil
 	}))
