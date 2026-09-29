@@ -58,9 +58,10 @@ type CommandFrequency struct {
 // a parameters map and a [WireConfig] paired to a string-representation
 // of the message type, i.e. "string" or "binary".
 type CommandConfig struct {
-	Fields []string              `yaml:"fields"`
-	Params ParamsConfig          `yaml:"params"`
-	Wire   map[string]WireConfig `yaml:"wire"`
+	Fields   []string              `yaml:"fields"`
+	Params   ParamsConfig          `yaml:"params"`
+	Wire     map[string]WireConfig `yaml:"wire"`
+	Shutdown []string              `yaml:"shutdown"`
 }
 
 // ParamName describes a parameter name, e.g. "direction".

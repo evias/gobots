@@ -27,6 +27,7 @@ func init() {
 	rootCmd.AddCommand(NewCmdRun())
 	rootCmd.AddCommand(NewCmdConsole())
 	rootCmd.AddCommand(NewCmdExec())
+	rootCmd.AddCommand(NewCmdConnect())
 }
 
 func Cmd() *cobra.Command {

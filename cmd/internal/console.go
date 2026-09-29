@@ -135,8 +135,8 @@ func loadDriver(hostOrDriver, driverFile string) (botfile.Driver, error) {
 		deviceHost = driver.Host()
 		devicePort = strconv.Itoa(int(driver.Port()))
 	} else if deviceHost, devicePort, hostErr = net.SplitHostPort(hostOrDriver); hostErr != nil {
-		slog.Error(fmt.Sprintf("failed to use custom host: %s - %s", hostOrDriver, err.Error()))
-		return nil, err
+		slog.Error(fmt.Sprintf("failed to use custom host: %s - %s", hostOrDriver, hostErr.Error()))
+		return nil, hostErr
 	}
 
 	if actualPort, err = strconv.ParseUint(devicePort, 10, 16); err != nil {

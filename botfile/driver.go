@@ -174,6 +174,7 @@ func (drv *robotDriver) CommandConfig(command string) CommandConfig {
 		Wire: map[string]WireConfig{
 			"string": WireConfig{Format: "{{{.Value}}}"},
 		},
+		Shutdown: []string{},
 	}
 	if !drv.HasCommand(command) {
 		return defaultCmd

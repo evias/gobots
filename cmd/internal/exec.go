@@ -78,11 +78,21 @@ func NewCmdExec() *cobra.Command {
 			}
 			defer useRobot.Disconnect()
 
-			time.Sleep(3 * time.Second)
-
 			// Convert the command arguments to an actual [botfile.Message].
 			wireMessage := driver.WireConfig(command, nil)
 			messageArgs := parseDataArgs(driver, command, dataArgs)
+
+			// Default exec duration of 1 second to avoid looping forever.
+			execDuration := time.Duration(1 * time.Second)
+			if duration, ok := messageArgs["Duration"]; ok && len(duration) > 0 {
+				var err error
+				execDuration, err = time.ParseDuration(duration)
+				if err != nil {
+					slog.Error(fmt.Sprintf("failed to parse command duration: %s", err.Error()))
+					return err
+				}
+				delete(messageArgs, "Duration") // Duration is not forwarded to command
+			}
 
 			// Underlying call to [botfile.Message#ToBytes] fills template with messageArgs.
 			if err := useRobot.Send(botfile.NewMessage(wireMessage), messageArgs); err != nil {
@@ -90,18 +100,25 @@ func NewCmdExec() *cobra.Command {
 				return err
 			}
 
-			time.Sleep(1 * time.Second)
+			// TODO(evias): See [Robot#sleepOrQuit], should not use time.Sleep directly.
+			time.Sleep(execDuration)
 
-			// Send automatic stop message.
-			// XXX should use configurable duration with sensible default.
-			stopMessage := driver.WireConfig("stop", nil)
-			if err := useRobot.Send(botfile.NewMessage(stopMessage), nil); err != nil {
-				slog.Error(fmt.Sprintf("failed to send stop command: %s", err.Error()))
-				return err
+			// Check if there is a teardown process configured for the executed command.
+			executedCmd := driver.CommandConfig(command)
+			if len(executedCmd.Shutdown) > 0 {
+				// Run every shutdown command sequentially.
+				for i := 0; i < len(executedCmd.Shutdown); i++ {
+					shutdownCmd := executedCmd.Shutdown[i]
+
+					// Send automatic shutdown message(s).
+					stopMessage := driver.WireConfig(shutdownCmd, nil)
+					if err := useRobot.Send(botfile.NewMessage(stopMessage), nil); err != nil {
+						slog.Error(fmt.Sprintf("failed to send shutdown '%s' command: %s", shutdownCmd, err.Error()))
+						return err
+					}
+				}
 			}
 
-			slog.Debug(fmt.Sprintf("Execution done successfully for %s", command))
-			time.Sleep(5 * time.Second)
 			return nil
 		},
 	}

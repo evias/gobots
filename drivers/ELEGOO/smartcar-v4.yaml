@@ -37,6 +37,7 @@ commands:
   move:
     fields:
       - speed
+      - duration
     params:
       direction:
         forward: 1
@@ -48,9 +49,12 @@ commands:
     wire:
       string:
         format: '{"N":102,"D1":{{.Direction}},"D2":{{.Speed}}}'
+    shutdown:
+      - stop
   turn:
     fields:
       - speed
+      - duration
     params:
       direction:
         left: 3
@@ -58,6 +62,8 @@ commands:
     wire:
       string:
         format: '{"N":102,"D1":{{.Direction}},"D2":{{.Speed}}}'
+    shutdown:
+      - stop
   camera_center:
     fields:
       - angle
