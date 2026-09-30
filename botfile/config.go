@@ -55,6 +55,13 @@ type SerialConfig struct {
 	StopBits uint8  `yaml:"stop_bits"`
 }
 
+// BluetoothChannelConfig describes a service/characteristic pair to represent
+// a bluetooth messaging channel.
+type BluetoothChannelConfig struct {
+	ServiceUUID        string `yaml:"service"`
+	CharacteristicUUID string `yaml:"characteristic"`
+}
+
 // CommandFrequency describe the interval between each Command execution.
 // The frequency field contains a [time.Duration]
 type CommandFrequency struct {

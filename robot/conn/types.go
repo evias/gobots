@@ -5,6 +5,8 @@ import (
 	"io"
 )
 
+// Socket defines the contract for connection sockets, notably it embeds
+// the [io.ReadWriteCloser] interface to require: Read(), Write(), Close().
 type Socket interface {
 	io.ReadWriteCloser
 }

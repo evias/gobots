@@ -90,12 +90,12 @@ func WithSerialDialer(fn DialFunc) TransportOption {
 	}
 }
 
-// Type returns the transport type, e.g. "tcp", "serial", "ble".
+// Type returns the transport type, e.g. "tcp", "serial", "bluetooth".
 func (*SerialTransport) Type() string {
 	return "serial"
 }
 
-// Socket return the opened socket instance, see io.ReadWriteCloser.
+// Socket returns the opened socket instance, see io.ReadWriteCloser.
 func (st *SerialTransport) Socket() Socket {
 	st.mtx.Lock()
 	defer st.mtx.Unlock()
@@ -103,7 +103,8 @@ func (st *SerialTransport) Socket() Socket {
 	return st.port
 }
 
-// Dialer should return a dial function, or [net.Dialer#DialContext]
+// Dialer returns a dial function, or a custom dialer that uses the
+// underlying Serial implementation from [serial#Open].
 func (st *SerialTransport) Dialer() DialFunc {
 	// use custom dialer process as injected
 	if st.dialFn != nil {
@@ -112,7 +113,7 @@ func (st *SerialTransport) Dialer() DialFunc {
 
 	// fallback to [serial#Open] implementation
 	return func(ctx context.Context, network, addr string) (Socket, error) {
-		return serial.Open(st.String(), st.Mode())
+		return serial.Open(addr, st.Mode())
 	}
 }
 
@@ -189,7 +190,7 @@ func (st *SerialTransport) Open() error {
 		dialCtx, cancelFn := context.WithTimeout(context.Background(), timeoutDuration)
 
 		// XXX dialerFn should be called in a goroutine to avoid blocking main thread.
-		socket, err = dialerFn(dialCtx, "tcp", hostWithPort)
+		socket, err = dialerFn(dialCtx, "serial", hostWithPort)
 		cancelFn() // cancel context directly after sync-call of dialer func
 
 		if err == nil {

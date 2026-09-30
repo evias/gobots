@@ -87,7 +87,7 @@ func WithDialer(fn DialFunc) TransportOption {
 	}
 }
 
-// Type returns the transport type, e.g. "tcp", "serial", "ble".
+// Type returns the transport type, e.g. "tcp", "serial", "bluetooth".
 func (*TCPTransport) Type() string {
 	return "tcp"
 }
