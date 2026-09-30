@@ -16,6 +16,9 @@ const (
 	ErrUnknownTransport  ErrorCode = "UNKNOWN_TRANSPORT_TYPE"
 	ErrWriteFailure      ErrorCode = "WRITE_FAILURE"
 	ErrHeartbeatFailure  ErrorCode = "HEARTBEAT_FAILURE"
+	ErrContextTimeout    ErrorCode = "CONTEXT_TIMEOUT"
+	ErrServiceNotFound   ErrorCode = "BLE_SERVICE_NOT_FOUND"
+	ErrCharNotFound      ErrorCode = "BLE_CHARACTERISTIC_NOT_FOUND"
 	ErrInternal          ErrorCode = "INTERNAL_ERROR"
 )
 
