@@ -275,7 +275,7 @@ func (blet *BLETransport) Socket() Socket {
 // Dialer returns a dial function, or a custom dialer that uses the
 // underlying Bluetooth implementation from [bluetooth.Device].
 //
-// Note that this dialer *scan* the bluetooth adapter and matches on
+// Note that this dialer *scans* the bluetooth adapter and matches on
 // the exact bluetooth MAC address, then connects to the device and
 // uses advertised service UUID and characteristics UUID as defined.
 func (blet *BLETransport) Dialer() DialFunc {
@@ -295,6 +295,7 @@ func (blet *BLETransport) Dialer() DialFunc {
 			blet.logger.Debug(fmt.Sprintf("Found bluetooth device '%s'", result.Address.String()),
 				"rssi", result.RSSI,
 				"name", result.LocalName(),
+				"srch", blet.String(),
 			)
 
 			// TODO(evias): Random addresses, lowercase/uppercase, non-exact matches.
@@ -352,15 +353,19 @@ func (blet *BLETransport) String() string {
 // Open dials the remote address, i.e. connect to the remote.
 func (blet *BLETransport) Open() error {
 	if blet.connConf.TimeoutMs == 0 {
-		blet.connConf.TimeoutMs = DefaultSerialTimeoutMs
+		blet.connConf.TimeoutMs = DefaultBLETimeoutMs
 	}
 
 	if blet.connConf.MaxAttempts == 0 {
-		blet.connConf.MaxAttempts = DefaultSerialAttempts
+		blet.connConf.MaxAttempts = DefaultBLEAttempts
 	}
 
 	if len(blet.connConf.Host) == 0 {
-		blet.connConf.Host = DefaultSerialPort
+		return &apierr.AppError{
+			Code:    apierr.ErrInvalidConnection,
+			Message: "Missing bluetooth MAC address",
+			Cause:   nil,
+		}
 	}
 
 	var (
