@@ -20,6 +20,14 @@ const (
 	DefaultBLEAttempts  = 3
 )
 
+// BLEChannel defines the contract for read/write bluetooth channels, notably
+// this interface is already implemented by [bluetooth.DeviceCharacteristic]
+// and is defined to avoid a direct dependency that would affect read/write.
+type BLEChannel interface {
+	Write(p []byte) (int, error)
+	Read(bytes []byte) (int, error)
+}
+
 // ----------------------------------------------------------------------------
 // BLEConn
 
@@ -33,20 +41,20 @@ const (
 // conn.SetCurrentChannel(uuid)
 // ```
 type BLEConn struct {
-	mtx *sync.Mutex
+	EnableDiscovery bool
 
 	// device contains the connected [bluetooth.Device] instance.
-	device bluetooth.Device // under mtx
+	device *bluetooth.Device
 
 	// servicesByUUID serves as a read-only registry filled in [BLETransport#Open].
-	servicesByUUID map[bluetooth.UUID]bluetooth.DeviceService // under mtx
+	servicesByUUID map[bluetooth.UUID]bluetooth.DeviceService
 
 	// channelsByUUID serves as a read-only registry filled in [BLETransport#Open].
-	channelsByUUID map[bluetooth.UUID]bluetooth.DeviceCharacteristic // under mtx
+	channelsByUUID map[bluetooth.UUID]BLEChannel
 
 	// currentChannel contains the currently active communication channel,
 	// See more: [bluetooth.DeviceCharacteristic].
-	currentChannel bluetooth.DeviceCharacteristic // under mtx
+	currentChannel BLEChannel
 }
 
 // Ensure that our implementation satisfies [Socket] interface.
@@ -55,28 +63,21 @@ var _ Socket = (*BLEConn)(nil)
 // Write writes p to the underlying [bluetooth.DeviceCharacteristic].
 // Write implements [Socket].
 func (c BLEConn) Write(p []byte) (int, error) {
-	c.mtx.Lock()
-	defer c.mtx.Unlock()
-
-	// No state transition should happen to currentChannel.
 	return c.currentChannel.Write(p)
 }
 
 // Read reads bytes from the underlying [bluetooth.DeviceCharacteristic].
 // Read implements [Socket].
 func (c BLEConn) Read(bytes []byte) (int, error) {
-	c.mtx.Lock()
-	defer c.mtx.Unlock()
-
-	// No state transition should happen to currentChannel.
 	return c.currentChannel.Read(bytes)
 }
 
 // Close disconnects from the underlying [bluetooth.Device].
 // Close implements [Socket].
 func (c BLEConn) Close() error {
-	c.mtx.Lock()
-	defer c.mtx.Unlock()
+	if c.device == nil {
+		return nil
+	}
 
 	return c.device.Disconnect()
 }
@@ -87,7 +88,7 @@ func (c BLEConn) Close() error {
 // This method requires the characteristic to have been discovered before.
 func (c *BLEConn) SetCurrentChannel(uuid bluetooth.UUID) error {
 	var (
-		channel bluetooth.DeviceCharacteristic
+		channel BLEChannel
 		ok      bool
 	)
 	if channel, ok = c.channelsByUUID[uuid]; !ok {
@@ -97,9 +98,6 @@ func (c *BLEConn) SetCurrentChannel(uuid bluetooth.UUID) error {
 			Cause:   nil,
 		}
 	}
-
-	c.mtx.Lock()
-	defer c.mtx.Unlock()
 
 	c.currentChannel = channel
 	return nil
@@ -118,7 +116,7 @@ func (c *BLEConn) SetCurrentChannel(uuid bluetooth.UUID) error {
 func (c *BLEConn) Discover(chanConfs []botfile.BluetoothChannelConfig) error {
 	var (
 		services []bluetooth.DeviceService
-		allChars []bluetooth.DeviceCharacteristic
+		allChars []bluetooth.DeviceCharacteristic // implements BLEChannel
 		chanErr  error
 	)
 	filterServicesUUID,
@@ -143,9 +141,7 @@ func (c *BLEConn) Discover(chanConfs []botfile.BluetoothChannelConfig) error {
 		service := services[s]
 
 		// BLEConn state transition protected by mtx.
-		c.mtx.Lock()
 		c.servicesByUUID[service.UUID()] = service
-		c.mtx.Unlock()
 
 		// Filter advertised bluetooth characteristics by UUID.
 		var chars []bluetooth.DeviceCharacteristic
@@ -169,7 +165,6 @@ func (c *BLEConn) Discover(chanConfs []botfile.BluetoothChannelConfig) error {
 
 	// Note that at time of Open(), we set the *first* channel to be active.
 	// For changing the active communication channel, see [BLEConn#SetCurrentChannel].
-	c.mtx.Lock()
 	for i := 0; i < len(allChars); i++ {
 		channel := allChars[i]
 
@@ -178,7 +173,6 @@ func (c *BLEConn) Discover(chanConfs []botfile.BluetoothChannelConfig) error {
 		}
 		c.channelsByUUID[channel.UUID()] = channel
 	}
-	c.mtx.Unlock()
 
 	return nil
 }
@@ -234,7 +228,6 @@ func NewBLETransport(
 	blet.mtx.Lock()
 	defer blet.mtx.Unlock()
 
-	blet.dev.Enable()
 	return blet
 }
 
@@ -256,6 +249,7 @@ func WithBLEDialer(fn DialFunc) TransportOption {
 
 // WithBluetoothChannelConfig implements an option helper to inject a custom
 // bluetooth channel configuration.
+//
 // Use this method if you know specific services and characteristics UUIDs for
 // the device you are connecting to, as pre-defined UUIDs improve connection speed.
 func WithBluetoothChannelConfig(cfg ...botfile.BluetoothChannelConfig) TransportOption {
@@ -292,6 +286,8 @@ func (blet *BLETransport) Dialer() DialFunc {
 
 	// fallback to [bluetooth.Device#Connect] implementation
 	return func(ctx context.Context, network, addr string) (Socket, error) {
+		// Make sure we enable the bluetooth adapter pre-scan.
+		blet.dev.Enable()
 
 		// Runs a bluetooth scan to find address.
 		scanCh := make(chan bluetooth.ScanResult, 1)
@@ -336,7 +332,8 @@ func (blet *BLETransport) Dialer() DialFunc {
 
 		// Connection established.
 		conn := &BLEConn{
-			device: device,
+			EnableDiscovery: true, // always enabled, except in tests.
+			device:          &device,
 		}
 		return conn, nil
 	}
@@ -415,11 +412,14 @@ func (blet *BLETransport) Open() error {
 	// discover services and characteristics we are interested in. The default,
 	// when chanConfs is empty, is to query all services and characteristics.
 
-	if err := conn.Discover(blet.chanConfs); err != nil {
-		return &apierr.AppError{
-			Code:    apierr.ErrInvalidConnection,
-			Message: fmt.Sprintf("Connection failed after %d attempts", blet.connConf.MaxAttempts),
-			Cause:   err,
+	// TODO(evias): Reduce tests cross pollination/pollution. Mock discovery.
+	if conn.EnableDiscovery {
+		if err := conn.Discover(blet.chanConfs); err != nil {
+			return &apierr.AppError{
+				Code:    apierr.ErrInvalidConnection,
+				Message: fmt.Sprintf("Connection failed after %d attempts", blet.connConf.MaxAttempts),
+				Cause:   err,
+			}
 		}
 	}
 

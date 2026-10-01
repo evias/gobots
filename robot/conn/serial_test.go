@@ -12,21 +12,24 @@ import (
 	"go.bug.st/serial"
 )
 
-// MockSocketPipe serves as a [serial.Port] compatibility bridge, and it is
+// MockSerialPort serves as a [serial.Port] compatibility bridge, and it is
 // necessary because [net.Pipe] may substitue [net.Conn], but not [serial.Port].
-type MockSocketPipe struct {
+type MockSerialPort struct {
 	net.Conn
 }
 
-func (*MockSocketPipe) Break(time.Duration) error                            { return nil }
-func (*MockSocketPipe) Drain() error                                         { return nil }
-func (*MockSocketPipe) GetModemStatusBits() (*serial.ModemStatusBits, error) { return nil, nil }
-func (*MockSocketPipe) ResetInputBuffer() error                              { return nil }
-func (*MockSocketPipe) ResetOutputBuffer() error                             { return nil }
-func (*MockSocketPipe) SetDTR(bool) error                                    { return nil }
-func (*MockSocketPipe) SetRTS(bool) error                                    { return nil }
-func (*MockSocketPipe) SetMode(*serial.Mode) error                           { return nil }
-func (*MockSocketPipe) SetReadTimeout(time.Duration) error                   { return nil }
+func (*MockSerialPort) Break(time.Duration) error                            { return nil }
+func (*MockSerialPort) Drain() error                                         { return nil }
+func (*MockSerialPort) GetModemStatusBits() (*serial.ModemStatusBits, error) { return nil, nil }
+func (*MockSerialPort) ResetInputBuffer() error                              { return nil }
+func (*MockSerialPort) ResetOutputBuffer() error                             { return nil }
+func (*MockSerialPort) SetDTR(bool) error                                    { return nil }
+func (*MockSerialPort) SetRTS(bool) error                                    { return nil }
+func (*MockSerialPort) SetMode(*serial.Mode) error                           { return nil }
+func (*MockSerialPort) SetReadTimeout(time.Duration) error                   { return nil }
+
+// Ensure that our mock satisfies interface.
+var _ serial.Port = (*MockSerialPort)(nil)
 
 // TestNewSerialTransport tests creating a SerialTransport
 func TestNewSerialTransport(t *testing.T) {
@@ -66,7 +69,7 @@ func TestSerialTransport_OpenClose(t *testing.T) {
 		if addr != "/dev/ttyUSB1" {
 			t.Fatalf("unexpected addr %q", addr)
 		}
-		return &MockSocketPipe{Conn: client}, nil
+		return &MockSerialPort{Conn: client}, nil
 	}))
 
 	openErr := st.Open()
@@ -87,7 +90,7 @@ func TestSerialTransport_Write(t *testing.T) {
 		Host: "/dev/ttyUSB1",
 	}, WithSerialDialer(func(ctx context.Context, network, addr string) (Socket, error) {
 		assert.Equalf(t, "/dev/ttyUSB1", addr, "unexpected addr %q", addr)
-		return &MockSocketPipe{Conn: client}, nil
+		return &MockSerialPort{Conn: client}, nil
 	}))
 
 	err := st.Open()
@@ -119,7 +122,7 @@ func TestSerialTransport_Read(t *testing.T) {
 		Host: "/dev/ttyUSB1",
 	}, WithSerialDialer(func(ctx context.Context, network, addr string) (Socket, error) {
 		assert.Equalf(t, "/dev/ttyUSB1", addr, "unexpected addr %q", addr)
-		return &MockSocketPipe{Conn: client}, nil
+		return &MockSerialPort{Conn: client}, nil
 	}))
 
 	err := st.Open()
