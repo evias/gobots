@@ -49,8 +49,13 @@ func NewCmdConnect() *cobra.Command {
 				return err
 			}
 
+			// --attempts
 			if connAttempts > 0 && connAttempts != int(driver.Config().Connection.MaxAttempts) {
 				botfile.WithMaxAttempts(uint16(connAttempts))(driver)
+			}
+			// --timeout
+			if connTimeoutMs > 0 && connTimeoutMs != int(driver.Config().Connection.TimeoutMs) {
+				botfile.WithTimeoutMs(uint32(connTimeoutMs))(driver)
 			}
 
 			slog.Debug(fmt.Sprintf("Driver: %s", driverFile))
@@ -98,6 +103,8 @@ func NewCmdConnect() *cobra.Command {
 		"The gobots driver file for your robot (optional).")
 	connectCmd.Flags().IntVarP(&connAttempts, "attempts", "a", 3,
 		"The connection tries round, in case connection does not succeed (optional).")
+	connectCmd.Flags().IntVarP(&connTimeoutMs, "timeout", "T", 3000,
+		"The number of milliseconds until connection timeout (optional).")
 	connectCmd.Flags().StringVarP(&duration, "duration", "t", defaultDuration,
 		"The duration to keep the connection alive, set to 0 for long-running process (optional).")
 	connectCmd.Flags().BoolVarP(&enableDebug, "debug", "D", false,

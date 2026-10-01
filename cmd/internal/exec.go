@@ -51,8 +51,13 @@ func NewCmdExec() *cobra.Command {
 				return err
 			}
 
+			// --attempts
 			if connAttempts > 0 && connAttempts != int(driver.Config().Connection.MaxAttempts) {
 				botfile.WithMaxAttempts(uint16(connAttempts))(driver)
+			}
+			// --timeout
+			if connTimeoutMs > 0 && connTimeoutMs != int(driver.Config().Connection.TimeoutMs) {
+				botfile.WithTimeoutMs(uint32(connTimeoutMs))(driver)
 			}
 
 			if command == "help" || !driver.HasCommand(command) {
@@ -131,6 +136,8 @@ func NewCmdExec() *cobra.Command {
 		"The gobots driver file for your robot (optional).")
 	execCmd.Flags().IntVarP(&connAttempts, "attempts", "a", 3,
 		"The connection tries round, in case connection does not succeed (optional).")
+	execCmd.Flags().IntVarP(&connTimeoutMs, "timeout", "T", 3000,
+		"The number of milliseconds until connection timeout (optional).")
 	execCmd.Flags().BoolVarP(&enableDebug, "debug", "D", false,
 		"Sets whether to enable debug mode/logs or not (optional).")
 

@@ -91,6 +91,14 @@ func WithMaxAttempts(max uint16) DriverOption {
 	}
 }
 
+// WithTimeoutMs implements an option helper to inject a custom number of milliseconds to timeout.
+func WithTimeoutMs(ms uint32) DriverOption {
+	return func(d Driver) {
+		rd := d.(*robotDriver)
+		rd.conf.Connection.TimeoutMs = ms
+	}
+}
+
 // Name returns the name a read from [DriverConfig] upon creation.
 func (drv *robotDriver) Name() string {
 	return drv.name

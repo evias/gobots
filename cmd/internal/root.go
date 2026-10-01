@@ -10,6 +10,7 @@ import (
 var (
 	driverFile    string
 	connAttempts  int
+	connTimeoutMs int
 	enableDebug   bool
 	defaultDriver = filepath.Join("drivers", "robot.yaml")
 
