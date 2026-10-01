@@ -113,6 +113,7 @@ func (st *SerialTransport) Dialer() DialFunc {
 
 	// fallback to [serial#Open] implementation
 	return func(ctx context.Context, network, addr string) (Socket, error) {
+		// TODO(evias): Take account of ctx, currently ignoring context deadline.
 		return serial.Open(addr, st.Mode())
 	}
 }

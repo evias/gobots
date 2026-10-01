@@ -104,11 +104,14 @@ func (tcpt *TCPTransport) Dialer() DialFunc {
 		return tcpt.dialFn
 	}
 
+	// tcpt may leak inside closure, extract timeout config here.
+	timeoutMs := time.Duration(tcpt.conf.TimeoutMs) * time.Millisecond
+
 	// fallback to [net.Dialer#DialContext] implementation
 	return func(ctx context.Context, network, addr string) (Socket, error) {
 		// returns (net.Conn, error)
 		return (&net.Dialer{
-			Timeout: DefaultConnectionTimeoutMs * time.Millisecond,
+			Timeout: timeoutMs,
 		}).DialContext(ctx, network, addr)
 	}
 }
@@ -162,6 +165,7 @@ func (tcpt *TCPTransport) Open() error {
 		at := i + 1
 		tcpt.logger.Debug(fmt.Sprintf("Connecting to host %s", hostWithPort),
 			"attempts", at,
+			"timeoutMs", tcpt.conf.TimeoutMs,
 		)
 
 		timeoutDuration := time.Duration(tcpt.conf.TimeoutMs) * time.Millisecond
