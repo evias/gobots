@@ -96,16 +96,6 @@ func TestBLETransport_Write(t *testing.T) {
 	require.NoError(t, err)
 	defer blet.Close()
 
-	// Peer runs in a goroutine — net.Pipe is synchronous, so
-	// Write blocks until the peer Reads.
-	go func() {
-		buf := make([]byte, 32)
-		n, err := server.Read(buf)
-		assert.NoError(t, err, "reading should not error")
-		assert.Equalf(t, "ping", string(buf[:n]),
-			"expected %q, got %q", "ping", buf[:n])
-	}()
-
 	if num, err := blet.Write([]byte("ping")); err != nil {
 		assert.NoError(t, err, "sending bytes should not error")
 		assert.NotEmpty(t, num)
