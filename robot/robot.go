@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"github.com/evias/gobots/botfile"
-	apierr "github.com/evias/gobots/errors"
 	apiconn "github.com/evias/gobots/robot/conn"
+	apierr "github.com/evias/gobots/robot/errors"
 )
 
 const (

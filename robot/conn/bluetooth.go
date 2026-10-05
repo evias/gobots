@@ -12,7 +12,7 @@ import (
 	"tinygo.org/x/bluetooth"
 
 	"github.com/evias/gobots/botfile"
-	apierr "github.com/evias/gobots/errors"
+	apierr "github.com/evias/gobots/robot/errors"
 )
 
 const (
