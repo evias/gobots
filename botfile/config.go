@@ -1,6 +1,9 @@
 package botfile
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // DriverConfig describes a device communication driver. A driver defines the
 // configuration fields, the setup commands, the shutdown process, connection
@@ -45,6 +48,30 @@ type ConnectionConfig struct {
 	Heartbeat   CommandFrequency `yaml:"heartbeat"`
 	MaxAttempts uint16           `yaml:"attempts"`
 	TimeoutMs   uint32           `yaml:"timeout"`
+}
+
+// TODO(evias): Max attempt is 0 when unspecified, extract DefaultMaxAttempt from robot.conn.
+func (c ConnectionConfig) String() string {
+	timeoutMsStr := (time.Duration(c.TimeoutMs) * time.Millisecond).String()
+	return fmt.Sprintf("%s (try: %d, timeout: %s)",
+		c.Address(), c.MaxAttempts, timeoutMsStr)
+}
+
+// Address returns a formatted address from the connection configuration.
+func (c ConnectionConfig) Address() string {
+	switch {
+	case c.Type == "serial":
+		return fmt.Sprintf("serial:%s", c.Host)
+
+	case c.Type == "ble":
+	case c.Type == "bluetooth":
+		return fmt.Sprintf("bluetooth:%s", c.Host)
+
+	default:
+	}
+
+	// tcp, udp, http, (https, ftp?)
+	return fmt.Sprintf("%s://%s:%d", c.Type, c.Host, c.Port)
 }
 
 // SerialConfig describes connection options for a serial port connection.

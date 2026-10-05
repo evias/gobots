@@ -1,6 +1,7 @@
 package driver
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -40,4 +41,19 @@ func sliceUnique(s []string) (u []string) {
 		u = append(u, k)
 	}
 	return // u
+}
+
+// ensureIncludePaths ensures that --include options are valid by returning an
+// error if an entry is not a directory, or if it doesn't exist.
+func ensureIncludePaths(paths []string) error {
+	for _, dir := range paths {
+		info, err := os.Stat(dir)
+		if err != nil {
+			return fmt.Errorf("--include %q: %w", dir, err)
+		}
+		if !info.IsDir() {
+			return fmt.Errorf("--include %q: not a directory", dir)
+		}
+	}
+	return nil
 }

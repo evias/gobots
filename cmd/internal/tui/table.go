@@ -4,10 +4,14 @@ import (
 	"fmt"
 )
 
+// TableRow describes a wrapper around a string-slice of values.
 type TableRow struct {
 	Values []string
 }
 
+// PrintTable uses [fmt.Print] to print a tabulated number of rows. Prints a
+// tab character ("\t") after each value from [TableRow#Values].
+// Note that this method requires the console to be set in raw mode.
 func PrintTable(rows []TableRow) error {
 	for _, row := range rows {
 		rowStr := ""
@@ -30,6 +34,10 @@ func PrintTable(rows []TableRow) error {
 	return nil
 }
 
+// PrintTableWithHeader uses [fmt.Print] to print a tabulated number of rows,
+// preceded by a row of headers. Prints a tab character ("\t") after each value
+// from [TableRow#Values].
+// Note that this method requires the console to be set in raw mode.
 func PrintTableWithHeader(headers []string, rows []TableRow) error {
 	headerStr := ""
 	for i, header := range headers {

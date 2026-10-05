@@ -31,15 +31,11 @@ func NewCmdDriverList() *cobra.Command {
 		Aliases: []string{"ls", "search"},
 		// This PreRunE ensures that --include options are used with actual
 		// folder paths, to avoid any work to happen before this validation.
+		// It also sets the console in raw mode. This is important for the
+		// `cmd.internal.tui` package so that tables render correctly.
 		PreRunE: func(cmd *cobra.Command, args []string) error {
-			for _, dir := range includePaths {
-				info, err := os.Stat(dir)
-				if err != nil {
-					return fmt.Errorf("--include %q: %w", dir, err)
-				}
-				if !info.IsDir() {
-					return fmt.Errorf("--include %q: not a directory", dir)
-				}
+			if err := ensureIncludePaths(includePaths); err != nil {
+				return err
 			}
 
 			// Set console in raw mode for printing.
@@ -60,7 +56,7 @@ func NewCmdDriverList() *cobra.Command {
 				includePaths = []string{defaultIncludePath}
 			}
 
-			// --include paths in order of appearance.
+			// --include paths in order of appearance, --driver precedes.
 			driverFiles := []string{driverFile}
 			for _, includePath := range includePaths {
 				matches, err := filepath.Glob(filepath.Join(includePath, searchDriversGlob))

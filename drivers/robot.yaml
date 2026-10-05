@@ -1,4 +1,5 @@
 name: "Generic Edge Device"
+brand: Generic (No Name)
 repository: "https://github.com/evias/gobots"
 fields:
 setup:
