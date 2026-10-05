@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
+
+	tui "github.com/evias/gobots/cmd/internal/tui"
 )
 
 const (
@@ -16,6 +19,8 @@ const (
 
 var (
 	includePaths []string
+	consoleState *term.State
+	consoleDesc  int
 )
 
 func NewCmdDriverList() *cobra.Command {
@@ -36,16 +41,26 @@ func NewCmdDriverList() *cobra.Command {
 					return fmt.Errorf("--include %q: not a directory", dir)
 				}
 			}
+
+			// Set console in raw mode for printing.
+			var err error
+			consoleDesc = int(os.Stdin.Fd())
+			if consoleState, err = term.MakeRaw(consoleDesc); err != nil {
+				return fmt.Errorf("terminal state raw mode failure: %w", err)
+			}
+
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// handle --debug flag
-			initLogs()
+			slog.SetDefault(&slog.Logger{})
+			// Restore console from raw mode after end.
+			defer term.Restore(consoleDesc, consoleState)
 
 			if len(includePaths) == 0 {
 				includePaths = []string{defaultIncludePath}
 			}
 
+			// --include paths in order of appearance.
 			driverFiles := []string{driverFile}
 			for _, includePath := range includePaths {
 				matches, err := filepath.Glob(filepath.Join(includePath, searchDriversGlob))
@@ -57,9 +72,17 @@ func NewCmdDriverList() *cobra.Command {
 				driverFiles = append(driverFiles, matches...)
 			}
 
-			slog.Debug(fmt.Sprintf("Found %d driver files across %d include paths",
-				len(driverFiles),
-				len(includePaths)))
+			tableRows := make([]tui.TableRow, len(driverFiles))
+			for _, driverFile := range driverFiles {
+				filename := filepath.Base(driverFile)
+				tableRows = append(tableRows, tui.TableRow{
+					Values: []string{
+						filename,
+						driverFile,
+					},
+				})
+			}
+			tui.PrintTable(tableRows)
 
 			return nil
 		},
@@ -69,8 +92,6 @@ func NewCmdDriverList() *cobra.Command {
 		"Specify folders to include for the drivers search (optional).")
 	listCmd.Flags().StringVarP(&driverFile, "driver", "d", defaultDriver,
 		"The gobots driver file for your robot (optional).")
-	listCmd.Flags().BoolVarP(&enableDebug, "debug", "D", false,
-		"Sets whether to enable debug mode/logs or not (optional).")
 
 	return listCmd
 }
