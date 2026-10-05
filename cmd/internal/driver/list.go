@@ -71,6 +71,7 @@ func NewCmdDriverList() *cobra.Command {
 
 				driverFiles = append(driverFiles, matches...)
 			}
+			driverFiles = sliceUnique(driverFiles)
 
 			tableRows := make([]tui.TableRow, len(driverFiles))
 			for _, driverFile := range driverFiles {

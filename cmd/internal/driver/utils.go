@@ -26,3 +26,18 @@ func initLogs() {
 		slog.SetDefault(slog.New(handler))
 	}
 }
+
+// sliceUnique returns a slice where s only has unique entries.
+func sliceUnique(s []string) (u []string) {
+	u = []string{}                      // dynamic alloc
+	m := make(map[string]uint8, len(s)) // static alloc, max all keys
+	for _, k := range s {
+		if _, e := m[k]; e {
+			continue
+		}
+
+		m[k] = uint8(1)
+		u = append(u, k)
+	}
+	return // u
+}
