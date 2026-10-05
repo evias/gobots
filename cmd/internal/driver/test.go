@@ -58,8 +58,8 @@ func NewCmdDriverTest() *cobra.Command {
 			slog.Debug(fmt.Sprintf("Host: %s", driver.Host()))
 			slog.Debug(fmt.Sprintf("Port: %d", driver.Port()))
 
-			// e.g. everything after "move" in: `gobots exec move --speed=10`
-			dataArgs := os.Args[3:]
+			// e.g. everything after "move" in: `gobots driver test move --speed=10`
+			dataArgs := os.Args[4:]
 			commandArgv := command + " " + strings.Join(dataArgs, " ")
 			slog.Debug(fmt.Sprintf("Command: %s", commandArgv))
 
@@ -137,8 +137,6 @@ func NewCmdDriverTest() *cobra.Command {
 		"The connection tries round, in case connection does not succeed (optional).")
 	testCmd.Flags().IntVarP(&connTimeoutMs, "timeout", "T", 3000,
 		"The number of milliseconds until connection timeout (optional).")
-	testCmd.Flags().BoolVarP(&enableDebug, "debug", "D", false,
-		"Sets whether to enable debug mode/logs or not (optional).")
 	testCmd.Flags().BoolVarP(&enableDebug, "debug", "D", false,
 		"Sets whether to enable debug mode/logs or not (optional).")
 
