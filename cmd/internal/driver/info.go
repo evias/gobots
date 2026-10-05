@@ -85,14 +85,12 @@ func NewCmdDriverInfo() *cobra.Command {
 // loadDriver returns a [botfile.Driver] after reading driverFile.
 func loadDriver(driverFile string) (botfile.Driver, error) {
 	if _, err := os.Stat(driverFile); err != nil && os.IsNotExist(err) {
-		slog.Error(fmt.Sprintf("failed to open driver file: %s", err.Error()))
-		return nil, err
+		return nil, fmt.Errorf("failed to open driver file: %w", err)
 	}
 
 	driver, err := botfile.LoadFromConfig(driverFile)
 	if err != nil {
-		slog.Error(fmt.Sprintf("failed to load driver file: %s", err.Error()))
-		return nil, err
+		return nil, fmt.Errorf("failed to load driver file: %w", err)
 	}
 
 	return driver, nil
