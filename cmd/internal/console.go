@@ -238,7 +238,7 @@ func completer(d prompt.Document) []prompt.Suggest {
 
 func commandSuggestions(cmd *cobra.Command) []prompt.Suggest {
 	suggestions := []prompt.Suggest{}
-	skippedCmds := []string{"completion", "console"}
+	skippedCmds := []string{"completion", "console"} // we remove console and completion from suggestions.
 	for _, sub := range cmd.Commands() {
 		if !sub.IsAvailableCommand() || sub.Hidden || slices.Contains(skippedCmds, sub.Name()) {
 			continue

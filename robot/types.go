@@ -10,6 +10,9 @@ type IRobot interface {
 	// Name should return the device's name as provided by Driver.
 	Name() string
 
+	// Driver should return the device's [botfile.Driver] instance.
+	Driver() botfile.Driver
+
 	// Quit should return a channel which is closed when the instance is stopped.
 	Quit() <-chan struct{}
 

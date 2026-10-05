@@ -135,6 +135,12 @@ func (r *Robot) Name() string {
 	return r.driver.Name()
 }
 
+// Driver returns the device's [botfile.Driver] instance.
+// Driver implements IRobot.
+func (r *Robot) Driver() botfile.Driver {
+	return r.driver
+}
+
 // Quit returns a channel which is closed when the instance is stopped.
 // Quit implements IRobot.
 //

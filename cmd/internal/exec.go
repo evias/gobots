@@ -118,7 +118,23 @@ func NewCmdExec() *cobra.Command {
 					// Send automatic shutdown message(s).
 					stopMessage := driver.WireConfig(shutdownCmd, nil)
 					if err := useRobot.Send(botfile.NewMessage(stopMessage), nil); err != nil {
-						slog.Error(fmt.Sprintf("failed to send shutdown '%s' command: %s", shutdownCmd, err.Error()))
+						slog.Error(fmt.Sprintf("failed to send command shutdown '%s': %s", shutdownCmd, err.Error()))
+						return err
+					}
+				}
+			}
+
+			// Check if there is a teardown process configured for the driver.
+			driverCfg := driver.Config()
+			if len(driverCfg.Shutdown) > 0 {
+				// Run every shutdown command sequentially.
+				for i := 0; i < len(driverCfg.Shutdown); i++ {
+					shutdownCmd := driverCfg.Shutdown[i]
+
+					// Send automatic shutdown message(s).
+					stopMessage := driver.WireConfig(shutdownCmd, nil)
+					if err := useRobot.Send(botfile.NewMessage(stopMessage), nil); err != nil {
+						slog.Error(fmt.Sprintf("failed to send driver shutdown '%s': %s", shutdownCmd, err.Error()))
 						return err
 					}
 				}
