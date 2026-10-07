@@ -14,11 +14,10 @@ import (
 
 const (
 	defaultIncludePath = "drivers/"
-	searchDriversGlob  = "**/*.yaml"
 )
 
 var (
-	includePaths []string
+	includePaths = []string{}
 	consoleState *term.State
 	consoleDesc  int
 )
@@ -39,10 +38,12 @@ func NewCmdDriverList() *cobra.Command {
 			}
 
 			// Set console in raw mode for printing.
-			var err error
-			consoleDesc = int(os.Stdin.Fd())
-			if consoleState, err = term.MakeRaw(consoleDesc); err != nil {
-				return fmt.Errorf("terminal state raw mode failure: %w", err)
+			if consoleState == nil {
+				var err error
+				consoleDesc = int(os.Stdin.Fd())
+				if consoleState, err = term.MakeRaw(consoleDesc); err != nil {
+					return fmt.Errorf("terminal state raw mode failure: %w", err)
+				}
 			}
 
 			return nil
@@ -51,6 +52,8 @@ func NewCmdDriverList() *cobra.Command {
 			slog.SetDefault(&slog.Logger{})
 			// Restore console from raw mode after end.
 			defer term.Restore(consoleDesc, consoleState)
+			// Restore arguments, to permit multiple calls from interactive console.
+			defer func() { includePaths = []string{} }()
 
 			if len(includePaths) == 0 {
 				includePaths = []string{defaultIncludePath}
@@ -59,12 +62,7 @@ func NewCmdDriverList() *cobra.Command {
 			// --include paths in order of appearance, --driver precedes.
 			driverFiles := []string{driverFile}
 			for _, includePath := range includePaths {
-				matches, err := filepath.Glob(filepath.Join(includePath, searchDriversGlob))
-				if err != nil {
-					slog.Error(fmt.Sprintf("failed to browse include path: %s", err.Error()))
-					return err
-				}
-
+				matches := findBotfiles(includePath)
 				driverFiles = append(driverFiles, matches...)
 			}
 			driverFiles = sliceUnique(driverFiles)
@@ -85,7 +83,7 @@ func NewCmdDriverList() *cobra.Command {
 		},
 	}
 
-	listCmd.Flags().StringArrayVarP(&includePaths, "include", "I", []string{defaultIncludePath},
+	listCmd.Flags().StringArrayVarP(&includePaths, "include", "I", []string{},
 		"Specify folders to include for the drivers search (optional).")
 	listCmd.Flags().StringVarP(&driverFile, "driver", "d", defaultDriver,
 		"The gobots driver file for your robot (optional).")

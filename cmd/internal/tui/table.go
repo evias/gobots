@@ -22,7 +22,7 @@ func PrintTable(rows []TableRow) error {
 				prefix = ""
 			}
 			if i == len(row.Values)-1 {
-				suffix = "\r\n"
+				suffix = "\r\n" // terminal raw mode!
 			}
 
 			rowStr += fmt.Sprintf("%s%s%s", prefix, value, suffix)
@@ -60,7 +60,7 @@ func PrintTableWithHeader(headers []string, rows []TableRow) error {
 				prefix = ""
 			}
 			if i == len(row.Values)-1 {
-				suffix = "\r\n"
+				suffix = "\r\n" // terminal raw mode!
 			}
 
 			rowStr += fmt.Sprintf("%s%s%s", prefix, value, suffix)

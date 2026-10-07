@@ -2,9 +2,11 @@ package driver
 
 import (
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 var (
@@ -56,4 +58,29 @@ func ensureIncludePaths(paths []string) error {
 		}
 	}
 	return nil
+}
+
+// findBotFiles walks includePath to search for .yaml files.
+func findBotfiles(includePath string) []string {
+	files := []string{}
+	filepath.WalkDir(includePath, func(
+		path string,
+		d fs.DirEntry,
+		err error,
+	) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+
+		if strings.HasSuffix(d.Name(), ".yaml") {
+			files = append(files, path)
+		}
+
+		return nil
+	})
+
+	return files
 }

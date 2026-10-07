@@ -143,8 +143,6 @@ func (r *Robot) Driver() botfile.Driver {
 
 // Quit returns a channel which is closed when the instance is stopped.
 // Quit implements IRobot.
-//
-// TODO(evias): Currently useless, stop/Shutdown should close(r.quit).
 func (r *Robot) Quit() <-chan struct{} {
 	return r.quit
 }
@@ -252,6 +250,14 @@ func (r *Robot) Send(msg botfile.Message, args any) error {
 	// Write to open transport stream.
 	num, err := r.connTransport.Write(bzSent)
 	if err != nil {
+		// Handle disconnect, blocked Write goroutine(s) must wake up and return err.
+		if apierr.IsTimeoutOrReset(err) {
+			r.logger.Debug("Connection closed ; (not an error)",
+				"msg", err.Error(),
+			)
+			return nil // Graceful
+		}
+
 		r.logger.Error(fmt.Sprintf("Error sending bytes to %s", r.hostWithPort),
 			"err", err,
 		)
@@ -306,6 +312,14 @@ func (r *Robot) receiveRoutine(connCtx context.Context) {
 			}
 			continue // to read
 		} else if err != nil {
+			// Handle disconnect, blocked Read goroutine(s) must wake up and return err.
+			if apierr.IsTimeoutOrReset(err) {
+				r.logger.Debug("Connection closed ; (not an error)",
+					"msg", err.Error(),
+				)
+				return
+			}
+
 			r.logger.Error(fmt.Sprintf("Error reading bytes from %s", r.hostWithPort),
 				"err", err,
 			)
@@ -343,7 +357,7 @@ func (r *Robot) receiveRoutine(connCtx context.Context) {
 //
 // TODO(evias): End-of-frame byte(s) should be read from driver.
 func (r *Robot) checkSendHeartbeat() error {
-	if !r.driver.HasCommand("heartbeat") {
+	if r.ctx.Err() != nil || !r.driver.HasCommand("heartbeat") {
 		return nil
 	}
 
@@ -360,6 +374,14 @@ func (r *Robot) checkSendHeartbeat() error {
 
 		// Write to open transport stream.
 		if _, err := r.connTransport.Write(bzHeartbeat); err != nil {
+			// Handle disconnect, blocked Write goroutine(s) must wake up and return err.
+			if apierr.IsTimeoutOrReset(err) {
+				r.logger.Debug("Connection closed ; (not an error)",
+					"msg", err.Error(),
+				)
+				return nil // Graceful
+			}
+
 			r.logger.Error(fmt.Sprintf("Error sending heartbeat bytes to %s", r.hostWithPort),
 				"err", err,
 			)

@@ -3,7 +3,11 @@
 package errors
 
 import (
+	"errors"
 	"fmt"
+	"io"
+	"net"
+	"syscall"
 )
 
 // ErrorCode represents the type/category of an error.
@@ -99,4 +103,20 @@ func IsCode(err error, code ErrorCode) bool {
 		return appErr.Code == code
 	}
 	return false
+}
+
+// ----------------------------------------------------------------------------
+// Public helpers
+
+// IsTimeoutOrReset returns true if the err object contains a timeout error,
+// a syscall.ECONNRESET (connection closed), a syscall.EPIPE (pipe closed),
+// or a io.EOF signal, to better detect when a connection has been closed.
+func IsTimeoutOrReset(err error) bool {
+	var ne net.Error
+	if errors.As(err, &ne) && ne.Timeout() {
+		return true
+	}
+	return errors.Is(err, syscall.ECONNRESET) ||
+		errors.Is(err, syscall.EPIPE) ||
+		errors.Is(err, io.EOF)
 }

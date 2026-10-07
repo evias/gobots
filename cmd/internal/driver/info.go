@@ -22,15 +22,9 @@ func NewCmdDriverInfo() *cobra.Command {
 		Short:   "Get information for edge device drivers (botfiles).",
 		Args:    cobra.NoArgs,
 		Aliases: []string{"view", "read", "get"},
-		// This PreRunE ensures that --include options are used with actual
-		// folder paths, to avoid any work to happen before this validation.
-		// It also sets the console in raw mode. This is important for the
-		// `cmd.internal.tui` package so that tables render correctly.
+		// This PreRunE ensures that the console is in raw mode. This is important
+		// for the `cmd.internal.tui` package so that tables render correctly.
 		PreRunE: func(cmd *cobra.Command, args []string) error {
-			if err := ensureIncludePaths(includePaths); err != nil {
-				return err
-			}
-
 			// Set console in raw mode for printing.
 			var err error
 			consoleDesc = int(os.Stdin.Fd())
@@ -44,6 +38,8 @@ func NewCmdDriverInfo() *cobra.Command {
 			slog.SetDefault(&slog.Logger{})
 			// Restore console from raw mode after end.
 			defer term.Restore(consoleDesc, consoleState)
+			// Restore arguments, to permit multiple calls from interactive console.
+			defer func() { driverFiles = []string{} }()
 
 			if len(driverFiles) == 0 {
 				return errors.New("at least one driver file must be provided (--driver).")
