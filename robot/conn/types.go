@@ -15,8 +15,22 @@ type Socket interface {
 // and address. For more details around parameters: [net.Dialer#DialContext].
 type DialFunc func(ctx context.Context, network, address string) (Socket, error)
 
+// Streamable defines the contract for stream structures from/to which we may
+// read/write, and which may be closed.
+type Streamable interface {
+	// Close should close the connection to the remote.
+	Close() error
+
+	// Read should read bytes from the stream, p must be pre-allocated.
+	Read(p []byte) (int, error)
+	// Write should send bytes to the stream, p must be pre-allocated.
+	Write(p []byte) (int, error)
+}
+
 // Transport defines the contract for robot connection wrappers.
 type Transport interface {
+	Streamable
+
 	// Type should return the transport type, e.g. "tcp", "serial", "ble".
 	Type() string
 
@@ -28,13 +42,6 @@ type Transport interface {
 
 	// Open should dial the remote address, i.e. connect to the remote.
 	Open() error
-	// Close should close the connection to the remote.
-	Close() error
-
-	// Read should read bytes from the stream, p must be pre-allocated.
-	Read(p []byte) (int, error)
-	// Write should send bytes to the stream, p must be pre-allocated.
-	Write(p []byte) (int, error)
 
 	// String should return a string representation of the instance.
 	String() string

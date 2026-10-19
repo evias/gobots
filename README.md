@@ -53,6 +53,17 @@ Connect and execute commands directly with `gobots exec`:
 $ gobots exec move --speed 10 --direction forward -d drivers/ELEGOO/smartcar-v4.yaml
 ```
 
+Find out information about specific edge device drivers with `gobots driver`:
+
+```bash
+# Accepts multiple --driver options
+$ gobots driver info -d drivers/robot.yaml
+$ gobots driver info -d drivers/ELEGOO/smartcar-v4.yaml -d drivers/robot.yaml
+
+# Enumerate all drivers found in a directory
+$ gobots driver list --include drivers/ --include /home/user/downloaded_drivers/
+```
+
 Execute runnable flows with `gobots run`:
 
 ```bash

@@ -82,7 +82,6 @@ func NewCmdExec() *cobra.Command {
 			defer useRobot.Disconnect()
 
 			// Convert the command arguments to an actual [botfile.Message].
-			wireMessage := driver.WireConfig(command, nil)
 			messageArgs := tui.ParseDataArgs(driver, command, dataArgs)
 
 			// Default exec duration of 1 second to avoid looping forever.
@@ -97,8 +96,15 @@ func NewCmdExec() *cobra.Command {
 				delete(messageArgs, "Duration") // Duration is not forwarded to command
 			}
 
+			messageCfg := driver.WireConfig(command, nil)
+			wireMessage, err := botfile.NewMessage(messageCfg, messageArgs)
+			if err != nil {
+				slog.Error(fmt.Sprintf("failed to prepare message: %s", err.Error()))
+				return err
+			}
+
 			// Underlying call to [botfile.Message#ToBytes] fills template with messageArgs.
-			if err := useRobot.Send(botfile.NewMessage(wireMessage), messageArgs); err != nil {
+			if err := useRobot.Send(wireMessage); err != nil {
 				slog.Error(fmt.Sprintf("failed to send '%s' command: %s", command, err.Error()))
 				return err
 			}
@@ -115,8 +121,14 @@ func NewCmdExec() *cobra.Command {
 					shutdownCmd := executedCmd.Shutdown[i]
 
 					// Send automatic shutdown message(s).
-					stopMessage := driver.WireConfig(shutdownCmd, nil)
-					if err := useRobot.Send(botfile.NewMessage(stopMessage), nil); err != nil {
+					stopCfg := driver.WireConfig(shutdownCmd, nil)
+					stopMessage, err := botfile.NewMessage(stopCfg, nil)
+					if err != nil {
+						slog.Error(fmt.Sprintf("failed to prepare command shutdown message: %s", err.Error()))
+						return err
+					}
+
+					if err := useRobot.Send(stopMessage); err != nil {
 						slog.Error(fmt.Sprintf("failed to send command shutdown '%s': %s", shutdownCmd, err.Error()))
 						return err
 					}
@@ -131,8 +143,14 @@ func NewCmdExec() *cobra.Command {
 					shutdownCmd := driverCfg.Shutdown[i]
 
 					// Send automatic shutdown message(s).
-					stopMessage := driver.WireConfig(shutdownCmd, nil)
-					if err := useRobot.Send(botfile.NewMessage(stopMessage), nil); err != nil {
+					stopCfg := driver.WireConfig(shutdownCmd, nil)
+					stopMessage, err := botfile.NewMessage(stopCfg, nil)
+					if err != nil {
+						slog.Error(fmt.Sprintf("failed to prepare driver shutdown message: %s", err.Error()))
+						return err
+					}
+
+					if err := useRobot.Send(stopMessage); err != nil {
 						slog.Error(fmt.Sprintf("failed to send driver shutdown '%s': %s", shutdownCmd, err.Error()))
 						return err
 					}

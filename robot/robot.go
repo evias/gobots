@@ -232,7 +232,7 @@ func (r *Robot) IsConnected() bool {
 // Send implements IRobot.
 //
 // TODO(evias): End-of-frame byte(s) should be read from driver.
-func (r *Robot) Send(msg botfile.Message, args any) error {
+func (r *Robot) Send(msg botfile.Wireable) error {
 	if r.ctx.Err() != nil || !r.IsConnected() {
 		return &apierr.AppError{
 			Code:    apierr.ErrNotConnected,
@@ -242,7 +242,7 @@ func (r *Robot) Send(msg botfile.Message, args any) error {
 	}
 
 	// Populate text/template fields using args, e.g. `{{.Speed}}`.
-	bzSent, err := msg.ToBytes(args)
+	bzSent, err := msg.ToBytes()
 	if err != nil {
 		return fmt.Errorf("failed to format message: %w", err)
 	}
@@ -279,7 +279,8 @@ func (r *Robot) Send(msg botfile.Message, args any) error {
 // Routines
 
 // receiveRoutine continuously reads from an opened [apiconn.Transport], and
-// sends periodical heartbeat commands every [DefaultHeartbeatDurationMs].
+// sends periodical heartbeat commands every [DefaultHeartbeatDurationMs] when
+// the driver configuration contains a heartbeat command.
 //
 // Continues processing incoming messages and heartbeats until connCtx expires,
 // or gets cancelled. Additionally, this method will return given a fatal error,
@@ -364,10 +365,13 @@ func (r *Robot) checkSendHeartbeat() error {
 	elapsedSinceLast := time.Now().UnixNano() - r.lastHeartbeatSendTime.Load()
 	if elapsedSinceLast >= 1e6*DefaultHeartbeatDurationMs { // XXX heartbeat frequency from driver
 		heartbeatCmd := r.driver.WireConfig("heartbeat", nil)
-		heartbeatMsg := botfile.NewMessage(heartbeatCmd)
+		heartbeatMsg, err := botfile.NewMessage(heartbeatCmd, nil)
+		if err != nil {
+			return fmt.Errorf("failed to prepare heartbeat message: %w", err)
+		}
 
 		// Format heartbeat command message using Wire format, no args.
-		bzHeartbeat, err := heartbeatMsg.ToBytes(nil)
+		bzHeartbeat, err := heartbeatMsg.ToBytes()
 		if err != nil {
 			return fmt.Errorf("failed to format heartbeat message: %w", err)
 		}

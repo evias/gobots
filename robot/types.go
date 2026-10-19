@@ -5,7 +5,7 @@ import (
 	apiconn "github.com/evias/gobots/robot/conn"
 )
 
-// IRobot defines the contract for Robot devices.
+// Robot defines the contract for Robot devices.
 type IRobot interface {
 	// Name should return the device's name as provided by Driver.
 	Name() string
@@ -26,5 +26,5 @@ type IRobot interface {
 	Disconnect() error
 
 	// Send should attempt to send a [botfile.Message] to a connected device.
-	Send(msg botfile.Message, args any) error
+	Send(msg botfile.Wireable) error
 }
