@@ -42,8 +42,8 @@ may need CGO/toolchain prerequisites on some platforms.
 ## Conventions
 
 - Language: Go, stdlib `log/slog` for logging; Cobra + pflag for the CLI.
-- Interfaces are named `I...` (e.g. `IRobot`, `botfile.Driver`); concrete types
-  declare interface compliance via `var _ IRobot = (*Robot)(nil)` assertions.
+- Interfaces use indicative names, e.g. `botfile.Driver`; concrete types
+  declare interface compliance via `var _ Driver = (*robotDriver)(nil)` assertions.
 - Aliased imports for internal packages: `apiconn "github.com/evias/gobots/robot/conn"`,
   `apierr "github.com/evias/gobots/robot/errors"`.
 - Errors follow the package-local pattern in `robot/errors` and are wrapped
@@ -58,12 +58,13 @@ may need CGO/toolchain prerequisites on some platforms.
 
 - Tests use `stretchr/testify`; place `_test.go` files next to the code.
 - Prefer testing through `robot.Simulator` and sample drivers in `drivers/`
-  for driver-related changes; `gobots driver test` offers a dry-run mode
-  (`--count 0` / no transmit) for sanity-checking command parsing.
+  for driver-related changes; `gobots driver test` never transmits messages
+  to actual edge devices, and is good for sanity-checking command parsing.
 - Network/serial-dependent tests should not require real hardware.
 
 ## Agent Rules
 
 - Do not commit directly to `main`; use feature branches (e.g. `feat/...`).
-- Keep `doc.go` and `README.md` updated when adding commands, config keys, or packages.
+- Keep `README.md` updated when adding commands, config keys, or packages.
+- Keep `doc.go` updated when adding or modifying core architectural features.
 - Do not add new heavy dependencies without need; the project favors stdlib.
