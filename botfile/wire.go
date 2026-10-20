@@ -57,6 +57,7 @@ func NewMessage(cfg WireConfig, args any) (*Message, error) {
 }
 
 // ToBytes encodes the [Message#Payload] to a bytes slice.
+// ToBytes implements Wireable
 func (m *Message) ToBytes() ([]byte, error) { return m.MarshalBinary() }
 
 // ----------------------------------------------------------------------------

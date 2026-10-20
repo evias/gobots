@@ -1,6 +1,7 @@
 package driver
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
@@ -10,14 +11,19 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/evias/gobots/botfile"
-	"github.com/evias/gobots/cmd/internal/tui"
+	tui "github.com/evias/gobots/cmd/internal/tui"
 	"github.com/evias/gobots/robot"
 )
 
+const (
+	DefaultSimulationSeconds  = 5 * time.Second
+	DefaultSimulationDebounce = 100 * time.Millisecond
+	DefaultSimulatedMessages  = 10
+)
+
 var (
-	command       string
-	connAttempts  int
-	connTimeoutMs int
+	command     string
+	numMessages int
 )
 
 func NewCmdDriverTest() *cobra.Command {
@@ -40,18 +46,13 @@ func NewCmdDriverTest() *cobra.Command {
 				return err
 			}
 
-			// --attempts
-			if connAttempts > 0 && connAttempts != int(driver.Config().Connection.MaxAttempts) {
-				botfile.WithMaxAttempts(uint16(connAttempts))(driver)
-			}
-			// --timeout
-			if connTimeoutMs > 0 && connTimeoutMs != int(driver.Config().Connection.TimeoutMs) {
-				botfile.WithTimeoutMs(uint32(connTimeoutMs))(driver)
-			}
-
 			if command == "help" || !driver.HasCommand(command) {
 				cmd.Usage()
 				return nil
+			}
+
+			if numMessages <= 0 {
+				numMessages = DefaultSimulatedMessages
 			}
 
 			slog.Debug(fmt.Sprintf("Driver: %s", driverFile))
@@ -63,88 +64,73 @@ func NewCmdDriverTest() *cobra.Command {
 			commandArgv := command + " " + strings.Join(dataArgs, " ")
 			slog.Debug(fmt.Sprintf("Command: %s", commandArgv))
 
-			// Now connect to the edge device using the driver configuration.
-			useRobot = robot.New(driver)
+			// Convert the command arguments to uppercased structure fields.
+			// i.e. --duration becomes Duration, --speed becomes Speed.
+			messageArgs := tui.ParseDataArgs(driver, command, dataArgs)
 
-			if err := useRobot.Connect(driver.Config().Connection); err != nil {
+			// Fields not forwarded to driver command.
+			delete(messageArgs, "Duration")
+			delete(messageArgs, "Driver")
+			delete(messageArgs, "Debug")
+
+			// Create a [robot.Robot] to interpret the [botfile.Driver],
+			// and create a [robot.Simulator] around it.
+			useRobot = robot.New(driver)
+			simulator := robot.NewSimulator(useRobot)
+
+			simulationCtx, cancelCtx := context.WithCancel(cmd.Context())
+			defer cancelCtx()
+
+			// Simulate a connection to an edge device.
+			if err := simulator.Start(simulationCtx); err != nil {
 				slog.Error(fmt.Sprintf("failed to connect with gobot: %s", err.Error()))
 				return err
 			}
-			defer useRobot.Disconnect()
 
-			// XXX simulator := robot.NewSimulator(useRobot, WithConnFunc(...), WithSendFunc(...))
-			// XXX simulator.Send(wireMessage, messageArgs)
+			// GOROUTINE 1: simulation writer (messaging) process.
+			// ----------------------------------------------------------------
+			// Feed the simulator with message frames in parallel, each pass of
+			// this goroutine makes the below main-thread blocking loop progress.
+			// And execute the shutdown process when all messages have been sent.
+			go func() {
+				slog.Debug(fmt.Sprintf("Now simulating %d messages for command: %s", numMessages, command))
 
-			// Convert the command arguments to an actual [botfile.Message].
-			messageArgs := tui.ParseDataArgs(driver, command, dataArgs)
+				// Shutdown simulation after we have written all simulated messages.
+				// This releases deadlocks for the main-thread blocking loop below.
+				defer simulator.Stop()
 
-			// Test command always uses duration of 1 second.
-			execDuration := time.Duration(1 * time.Second)
-			if duration, ok := messageArgs["Duration"]; ok && len(duration) > 0 {
-				delete(messageArgs, "Duration") // Duration is not forwarded to command
-			}
-
-			messageCfg := driver.WireConfig(command, nil)
-			wireMessage, err := botfile.NewMessage(messageCfg, messageArgs)
-			if err != nil {
-				slog.Error(fmt.Sprintf("failed to prepare message: %s", err.Error()))
-				return err
-			}
-
-			// Underlying call to [botfile.Message#ToBytes] fills template with messageArgs.
-			// TODO(evias): The actual message should not be SENT in test mode!
-			if err := useRobot.Send(wireMessage); err != nil {
-				slog.Error(fmt.Sprintf("failed to send '%s' command: %s", command, err.Error()))
-				return err
-			}
-
-			// TODO(evias): See [Robot#sleepOrQuit], should not use time.Sleep directly.
-			time.Sleep(execDuration)
-
-			// TODO(evias): Refactor to [Robot#Shutdown()].
-			// Check if there is a teardown process configured for the executed command.
-			executedCmd := driver.CommandConfig(command)
-			if len(executedCmd.Shutdown) > 0 {
-				// Run every shutdown command sequentially.
-				for i := 0; i < len(executedCmd.Shutdown); i++ {
-					shutdownCmd := executedCmd.Shutdown[i]
-
-					// Send automatic shutdown message(s).
-					stopCfg := driver.WireConfig(shutdownCmd, nil)
-					stopMessage, err := botfile.NewMessage(stopCfg, nil)
+				// Send messages through the [robot.Simulator] instance.
+				// Messages are NOT sent to the edge device.
+				for i := 0; i < numMessages; i++ {
+					commandCfg := driver.WireConfig(command, nil)
+					wireMessage, err := botfile.NewMessage(commandCfg, messageArgs)
 					if err != nil {
-						slog.Error(fmt.Sprintf("failed to prepare command shutdown message: %s", err.Error()))
-						return err
+						slog.Error(fmt.Sprintf("failed to prepare simulated message: %s", err.Error()))
+						return
 					}
 
-					if err := useRobot.Send(stopMessage); err != nil {
-						slog.Error(fmt.Sprintf("failed to send command shutdown '%s': %s", shutdownCmd, err.Error()))
-						return err
+					if err := simulator.Send(wireMessage); err != nil {
+						slog.Error(fmt.Sprintf("failed to simulate sending '%s' command: %s", command, err.Error()))
+						return
 					}
+
+					// TODO(evias): use something else than sleep.
+					time.Sleep(DefaultSimulationDebounce)
 				}
-			}
+			}()
 
-			// Check if there is a teardown process configured for the driver.
-			driverCfg := driver.Config()
-			if len(driverCfg.Shutdown) > 0 {
-				// Run every shutdown command sequentially.
-				for i := 0; i < len(driverCfg.Shutdown); i++ {
-					shutdownCmd := driverCfg.Shutdown[i]
-
-					// Send automatic shutdown message(s).
-					stopCfg := driver.WireConfig(shutdownCmd, nil)
-					stopMessage, err := botfile.NewMessage(stopCfg, nil)
-					if err != nil {
-						slog.Error(fmt.Sprintf("failed to prepare driver shutdown message: %s", err.Error()))
-						return err
-					}
-
-					// Send automatic shutdown message(s).
-					if err := useRobot.Send(stopMessage); err != nil {
-						slog.Error(fmt.Sprintf("failed to send driver shutdown '%s': %s", shutdownCmd, err.Error()))
-						return err
-					}
+			// BLOCKING main-thread intentionally
+			// ----------------------------------------------------------------
+			// We wait for all messages to be received and forwarded onto the
+			// receive channel, i.e. consumed as message frames sequentially.
+			for frame := range simulator.Frames() {
+				bzMsg, err := frame.Message.ToBytes()
+				if err != nil {
+					slog.Error(fmt.Sprintf("failed to read frame: %s", err.Error()))
+					return err
 				}
+
+				fmt.Printf("received simulated frame sim-%.6d (%d bytes)\n", frame.Seq, len(bzMsg))
 			}
 
 			return nil
@@ -157,10 +143,8 @@ func NewCmdDriverTest() *cobra.Command {
 
 	testCmd.Flags().StringVarP(&driverFile, "driver", "d", defaultDriver,
 		"The gobots driver file for your robot (optional).")
-	testCmd.Flags().IntVarP(&connAttempts, "attempts", "a", 3,
-		"The connection tries round, in case connection does not succeed (optional).")
-	testCmd.Flags().IntVarP(&connTimeoutMs, "timeout", "T", 3000,
-		"The number of milliseconds until connection timeout (optional).")
+	testCmd.Flags().IntVarP(&numMessages, "count", "c", DefaultSimulatedMessages,
+		"The number of messages to simulate (optional).")
 	testCmd.Flags().BoolVarP(&enableDebug, "debug", "D", false,
 		"Sets whether to enable debug mode/logs or not (optional).")
 
