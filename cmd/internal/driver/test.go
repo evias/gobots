@@ -24,6 +24,7 @@ const (
 var (
 	command     string
 	numMessages int
+	msgInterval string
 )
 
 func NewCmdDriverTest() *cobra.Command {
@@ -68,7 +69,18 @@ func NewCmdDriverTest() *cobra.Command {
 			// i.e. --duration becomes Duration, --speed becomes Speed.
 			messageArgs := tui.ParseDataArgs(driver, command, dataArgs)
 
+			execInterval := time.Duration(DefaultSimulationDebounce)
+			if len(msgInterval) > 0 {
+				var err error
+				execInterval, err = time.ParseDuration(msgInterval)
+				if err != nil {
+					slog.Error(fmt.Sprintf("failed to parse debounce interval (duration): %s", err.Error()))
+					return err
+				}
+			}
+
 			// Fields not forwarded to driver command.
+			delete(messageArgs, "Interval")
 			delete(messageArgs, "Duration")
 			delete(messageArgs, "Driver")
 			delete(messageArgs, "Debug")
@@ -115,7 +127,7 @@ func NewCmdDriverTest() *cobra.Command {
 					}
 
 					// TODO(evias): use something else than sleep.
-					time.Sleep(DefaultSimulationDebounce)
+					time.Sleep(execInterval)
 				}
 			}()
 
@@ -145,6 +157,8 @@ func NewCmdDriverTest() *cobra.Command {
 		"The gobots driver file for your robot (optional).")
 	testCmd.Flags().IntVarP(&numMessages, "count", "c", DefaultSimulatedMessages,
 		"The number of messages to simulate (optional).")
+	testCmd.Flags().StringVarP(&msgInterval, "interval", "i", DefaultSimulationDebounce.String(),
+		"Sets the debounce interval between messages, defaults to 100ms (optional).")
 	testCmd.Flags().BoolVarP(&enableDebug, "debug", "D", false,
 		"Sets whether to enable debug mode/logs or not (optional).")
 
