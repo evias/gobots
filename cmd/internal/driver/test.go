@@ -142,7 +142,7 @@ func NewCmdDriverTest() *cobra.Command {
 					return err
 				}
 
-				fmt.Printf("received simulated frame sim-%.6d (%d bytes)\n", frame.Seq, len(bzMsg))
+				fmt.Printf("processed frame sim-%.6d (%d bytes)\n", frame.Seq, len(bzMsg))
 			}
 
 			return nil

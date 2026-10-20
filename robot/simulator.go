@@ -223,7 +223,7 @@ func (sim *robotSimulator) receiveRoutine(ctx context.Context) {
 
 			select {
 			case sim.frames <- frame:
-				sim.logger.Debug(fmt.Sprintf("sending simulated frame sim-%.6d (%d bytes)", frame.Seq, n))
+				sim.logger.Debug(fmt.Sprintf("received frame sim-%.6d (%d bytes): %v", frame.Seq, n, frame.Message.String()))
 			case <-ctx.Done():
 				sim.logger.Debug("[sim] simulation context cancelled")
 				return

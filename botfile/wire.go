@@ -18,6 +18,8 @@ const (
 type Wireable interface {
 	// ToBytes should encode the message to a bytes slice.
 	ToBytes() ([]byte, error)
+	// String should return the string representation of the message.
+	String() string
 
 	// WriteTo should write the message to a [io.Writer].
 	WriteTo(w io.Writer) (int64, error)
@@ -59,6 +61,11 @@ func NewMessage(cfg WireConfig, args any) (*Message, error) {
 // ToBytes encodes the [Message#Payload] to a bytes slice.
 // ToBytes implements Wireable
 func (m *Message) ToBytes() ([]byte, error) { return m.MarshalBinary() }
+
+// String returns a string representation of the [Message#Payload].
+func (m *Message) String() string {
+	return string(m.Payload)
+}
 
 // ----------------------------------------------------------------------------
 
