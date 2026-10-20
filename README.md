@@ -64,6 +64,16 @@ $ gobots driver info -d drivers/ELEGOO/smartcar-v4.yaml -d drivers/robot.yaml
 $ gobots driver list --include drivers/ --include /home/user/downloaded_drivers/
 ```
 
+Test your driver commands using the `robot.Simulator` with `gobots driver test`:
+
+```bash
+# Accepts any driver command.
+$ gobots driver test heartbeat -d drivers/ELEGOO/smartcar-v4.yaml --count 25 --interval 10ms
+
+# Parses the command for sanity but doesn't transmit it (dry run).
+$ gobots driver test move --speed 70 --direction forward --count 1000 --interval 0
+```
+
 Execute runnable flows with `gobots run`:
 
 ```bash
