@@ -10,8 +10,7 @@ func NewTransport(
 	switch {
 	case conf.Type == "serial":
 		return NewSerialTransport(conf, options...)
-	case conf.Type == "ble":
-	case conf.Type == "bluetooth":
+	case conf.Type == "ble", conf.Type == "bluetooth":
 		return NewBLETransport(conf, options...)
 	default:
 	}

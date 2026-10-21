@@ -63,8 +63,7 @@ func (c ConnectionConfig) Address() string {
 	case c.Type == "serial":
 		return fmt.Sprintf("serial:%s", c.Host)
 
-	case c.Type == "ble":
-	case c.Type == "bluetooth":
+	case c.Type == "ble", c.Type == "bluetooth":
 		return fmt.Sprintf("bluetooth:%s", c.Host)
 
 	default:
