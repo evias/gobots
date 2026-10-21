@@ -40,12 +40,9 @@ func TestConnectionConfig_Address(t *testing.T) {
 			expected: "bluetooth:AA:BB:CC:DD:EE:FF",
 		},
 		{
-			// TODO: currently falls back to the typed-URL format because
-			// `case c.Type == "ble":` has an empty body (no switch
-			// fallthrough in Go); expected "bluetooth:AA:BB:CC:DD:EE:FF".
 			name:     "ble",
 			conf:     ConnectionConfig{Type: "ble", Host: "AA:BB:CC:DD:EE:FF"},
-			expected: "ble://AA:BB:CC:DD:EE:FF:0",
+			expected: "bluetooth:AA:BB:CC:DD:EE:FF",
 		},
 	}
 
