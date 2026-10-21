@@ -4,7 +4,7 @@
 which describe commands, tasks and workflows executed by *robots*,
 or any type of edge devices.
 
-[![License](https://img.shields.io/badge/License-3--Clause%20BSD-blue.svg)][./LICENSE]
+[![License](https://img.shields.io/badge/License-3--Clause%20BSD-blue.svg)](./LICENSE)
 ![Go version](https://img.shields.io/github/go-mod/go-version/evias/gobots)
 [![v0.x-dev](https://img.shields.io/badge/evias/gobots-v0.x--dev-blue?logo=github)](https://evi.as)
 
