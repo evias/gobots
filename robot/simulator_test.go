@@ -178,19 +178,24 @@ func (r rawWireable) WriteTo(w io.Writer) (int64, error) {
 }
 func (r rawWireable) ReadFrom(io.Reader) (int64, error) { return 0, errors.New("read failed") }
 
-// TestSimulator_ReceiveRoutine_InvalidPayload documents that frames built
-// from a non size-prefixed payload carry a nil message.
-// TODO: the receive routine currently pushes a nil Message when
-// botfile.LoadFromBytes fails instead of skipping the frame.
-func TestSimulator_ReceiveRoutine_InvalidPayload(t *testing.T) {
+// TestSimulator_ReceiveRoutine_SkipsInvalidPayload tests that payloads which
+// fail to decode are skipped: no frame is emitted and the message sequence
+// does not increment.
+func TestSimulator_ReceiveRoutine_SkipsInvalidPayload(t *testing.T) {
 	sim := newTestSimulator(t, context.Background())
 
-	// Raw bytes without the 4-byte size prefix.
+	// Raw bytes without the 4-byte size prefix: no frame is emitted.
 	err := sim.Send(rawWireable("no"))
 	require.NoError(t, err)
 
+	// A subsequent valid message round-trips as the first frame.
+	msg, err := botfile.NewMessage(botfile.WireConfig{Format: "{Stop}"}, nil)
+	require.NoError(t, err)
+	require.NoError(t, sim.Send(msg))
+
 	frame := recvFrame(t, sim.Frames(), 2*time.Second)
-	assert.Nil(t, frame.Message, "expected nil message for invalid payload")
+	assert.Equal(t, uint64(1), frame.Seq, "invalid payloads must not increment the sequence")
+	assert.Equal(t, "{Stop}", frame.Message.String())
 }
 
 // TestSimulator_Stop_Idempotent tests that Stop may be called multiple times.
