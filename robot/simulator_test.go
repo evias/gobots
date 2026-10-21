@@ -178,6 +178,21 @@ func (r rawWireable) WriteTo(w io.Writer) (int64, error) {
 }
 func (r rawWireable) ReadFrom(io.Reader) (int64, error) { return 0, errors.New("read failed") }
 
+// TestSimulator_ReceiveRoutine_InvalidPayload documents that frames built
+// from a non size-prefixed payload carry a nil message.
+// TODO: the receive routine currently pushes a nil Message when
+// botfile.LoadFromBytes fails instead of skipping the frame.
+func TestSimulator_ReceiveRoutine_InvalidPayload(t *testing.T) {
+	sim := newTestSimulator(t, context.Background())
+
+	// Raw bytes without the 4-byte size prefix.
+	err := sim.Send(rawWireable("no"))
+	require.NoError(t, err)
+
+	frame := recvFrame(t, sim.Frames(), 2*time.Second)
+	assert.Nil(t, frame.Message, "expected nil message for invalid payload")
+}
+
 // TestSimulator_Stop_Idempotent tests that Stop may be called multiple times.
 func TestSimulator_Stop_Idempotent(t *testing.T) {
 	sim := newTestSimulator(t, context.Background())

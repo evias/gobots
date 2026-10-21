@@ -223,7 +223,11 @@ func (sim *robotSimulator) receiveRoutine(ctx context.Context) {
 
 			select {
 			case sim.frames <- frame:
-				sim.logger.Debug(fmt.Sprintf("received frame sim-%.6d (%d bytes): %v", frame.Seq, n, frame.Message.String()))
+				frameStr := "<invalid payload>"
+				if rawMessage != nil {
+					frameStr = rawMessage.String()
+				}
+				sim.logger.Debug(fmt.Sprintf("received frame sim-%.6d (%d bytes): %v", frame.Seq, n, frameStr))
 			case <-ctx.Done():
 				sim.logger.Debug("[sim] simulation context cancelled")
 				return
