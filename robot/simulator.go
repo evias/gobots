@@ -96,6 +96,10 @@ func NewSimulator(robot IRobot, options ...SimulatorOption) Simulator {
 		client: cli,
 		server: srv,
 		frames: make(chan Frame, 32),
+
+		// Defaults, overwritten by Start or SimulatorWithContext.
+		ctx:       context.Background(),
+		cancelCtx: func() {},
 	}
 
 	sim.lastFrameSeq.Store(int64(0))
