@@ -34,7 +34,7 @@ func sliceToMap(args []string) map[string]string {
 			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "--") {
 				m[args[i]] = args[i+1]
 				i++ // consume the value
-			} else if i+1 < len(args) && strings.Contains(args[i], "=") {
+			} else if strings.Contains(args[i], "=") {
 				nv := strings.SplitN(args[i], "=", 2)
 				m[nv[0]] = nv[1]
 			} else {

@@ -43,13 +43,9 @@ func TestSliceToMap(t *testing.T) {
 			expected: map[string]string{"--speed": "10"},
 		},
 		{
-			// TODO: the `--key=value` split only triggers when a
-			// subsequent token starts with `--`, so a trailing
-			// `--speed=10` keeps the full token as key with an
-			// empty value.
 			name:     "equals_sign_trailing",
 			args:     []string{"--speed=10"},
-			expected: map[string]string{"--speed=10": ""},
+			expected: map[string]string{"--speed": "10"},
 		},
 		{
 			name:     "flag_without_value",

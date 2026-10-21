@@ -162,11 +162,16 @@ func (drv *robotDriver) FieldDefault(name string) interface{} {
 		}
 		return str
 	case ft == "number":
-		i, ok := f.Default.(float64)
-		if !ok {
-			return float64(0)
+		iF, okF := f.Default.(float64)
+		if okF {
+			return iF
 		}
-		return i
+		// fallback to uint64.
+		iI, okI := f.Default.(uint64)
+		if okI {
+			return iI
+		}
+		return float64(0)
 		// XXX case ft == "duration" should recognize e.g. "5s".
 	}
 
