@@ -238,16 +238,21 @@ func (st *SerialTransport) Close() error {
 }
 
 // Read reads bytes from the stream, p must be pre-allocated.
+//
+// The mutex is only taken to snapshot the [bufio.Reader]; the blocking read
+// itself happens without the lock held, so that concurrent [SerialTransport#Write]
+// calls are not blocked while waiting for incoming data.
 func (st *SerialTransport) Read(
 	bytes []byte,
 ) (int, error) {
 	st.mtx.Lock()
-	defer st.mtx.Unlock()
+	reader := st.reader
+	st.mtx.Unlock()
 
-	if st.reader == nil {
+	if reader == nil {
 		return 0, net.ErrClosed
 	}
-	return st.reader.Read(bytes)
+	return reader.Read(bytes)
 }
 
 // Write sends bytes to the stream, p must be pre-allocated.

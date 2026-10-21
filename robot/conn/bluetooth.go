@@ -452,16 +452,21 @@ func (blet *BLETransport) Close() error {
 }
 
 // Read reads bytes from the stream, p must be pre-allocated.
+//
+// The mutex is only taken to snapshot the [bufio.Reader]; the blocking read
+// itself happens without the lock held, so that concurrent [BLETransport#Write]
+// calls are not blocked while waiting for incoming data.
 func (blet *BLETransport) Read(
 	bytes []byte,
 ) (int, error) {
 	blet.mtx.Lock()
-	defer blet.mtx.Unlock()
+	reader := blet.reader
+	blet.mtx.Unlock()
 
-	if blet.reader == nil {
+	if reader == nil {
 		return 0, net.ErrClosed
 	}
-	return blet.reader.Read(bytes)
+	return reader.Read(bytes)
 }
 
 // Write sends bytes to the stream, p must be pre-allocated.

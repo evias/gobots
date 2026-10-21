@@ -220,16 +220,21 @@ func (tcpt *TCPTransport) Close() error {
 }
 
 // Read reads bytes from the stream, p must be pre-allocated.
+//
+// The mutex is only taken to snapshot the [bufio.Reader]; the blocking read
+// itself happens without the lock held, so that concurrent [TCPTransport#Write]
+// calls are not blocked while waiting for incoming data.
 func (tcpt *TCPTransport) Read(
 	bytes []byte,
 ) (int, error) {
 	tcpt.mtx.Lock()
-	defer tcpt.mtx.Unlock()
+	reader := tcpt.reader
+	tcpt.mtx.Unlock()
 
-	if tcpt.reader == nil {
+	if reader == nil {
 		return 0, net.ErrClosed
 	}
-	return tcpt.reader.Read(bytes)
+	return reader.Read(bytes)
 }
 
 // Write sends bytes to the stream, p must be pre-allocated.

@@ -96,6 +96,10 @@ func NewSimulator(robot IRobot, options ...SimulatorOption) Simulator {
 		client: cli,
 		server: srv,
 		frames: make(chan Frame, 32),
+
+		// Defaults, overwritten by Start or SimulatorWithContext.
+		ctx:       context.Background(),
+		cancelCtx: func() {},
 	}
 
 	sim.lastFrameSeq.Store(int64(0))
@@ -214,19 +218,21 @@ func (sim *robotSimulator) receiveRoutine(ctx context.Context) {
 		if n > 0 {
 			rawMessage, err := botfile.LoadFromBytes(buf[:n])
 			if err != nil {
+				// Invalid payloads are skipped: no frame is emitted and the
+				// message sequence does not increment.
 				sim.logger.Error("failed to create simulated message", "err", err)
-			}
+			} else {
+				frameSeq := sim.lastFrameSeq.Load() + int64(1)
+				frame := Frame{Seq: uint64(frameSeq), Message: rawMessage}
+				sim.lastFrameSeq.Store(frameSeq)
 
-			frameSeq := sim.lastFrameSeq.Load() + int64(1)
-			frame := Frame{Seq: uint64(frameSeq), Message: rawMessage}
-			sim.lastFrameSeq.Store(frameSeq)
-
-			select {
-			case sim.frames <- frame:
-				sim.logger.Debug(fmt.Sprintf("received frame sim-%.6d (%d bytes): %v", frame.Seq, n, frame.Message.String()))
-			case <-ctx.Done():
-				sim.logger.Debug("[sim] simulation context cancelled")
-				return
+				select {
+				case sim.frames <- frame:
+					sim.logger.Debug(fmt.Sprintf("received frame sim-%.6d (%d bytes): %v", frame.Seq, n, frame.Message.String()))
+				case <-ctx.Done():
+					sim.logger.Debug("[sim] simulation context cancelled")
+					return
+				}
 			}
 		}
 		if err != nil {
