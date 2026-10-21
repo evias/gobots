@@ -17,14 +17,7 @@ func TestNewTransport(t *testing.T) {
 	}{
 		{name: "tcp", confType: "tcp", expected: (*TCPTransport)(nil)},
 		{name: "serial", confType: "serial", expected: (*SerialTransport)(nil)},
-		{
-			// TODO: currently falls back to TCPTransport because
-			// `case conf.Type == "ble":` has an empty body (no switch
-			// fallthrough in Go); expected (*BLETransport)(nil).
-			name:     "ble",
-			confType: "ble",
-			expected: (*TCPTransport)(nil),
-		},
+		{name: "ble", confType: "ble", expected: (*BLETransport)(nil)},
 		{name: "bluetooth", confType: "bluetooth", expected: (*BLETransport)(nil)},
 		{name: "unknown_defaults_to_tcp", confType: "udp", expected: (*TCPTransport)(nil)},
 	}
