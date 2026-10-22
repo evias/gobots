@@ -153,20 +153,29 @@ func TestDriver_FieldDefault_NumberMismatch(t *testing.T) {
 // TestDriver_FieldDefault_IntegerYAMLDefault documents that integer defaults
 // loaded from YAML (unmarshalled as uint64 by go-yaml) do not satisfy the
 // float64 type assertion and fall back to zero.
-// TODO: "number" fields with integer YAML defaults silently resolve to 0.
-func TestDriver_FieldDefault_IntegerYAMLDefault(t *testing.T) {
+func TestDriver_FieldDefault_IntegerFloatYAMLDefault(t *testing.T) {
 	conf := DriverConfig{
 		Name: "Int Default Device",
 		Fields: map[string]FieldConfig{
-			"speed": {Type: "number", Default: 50},
+			"speed_int":   {Type: "number", Default: uint64(50)},
+			"speed_float": {Type: "number", Default: float64(50)},
+			"speed_def":   {Type: "number", Default: 50},
 		},
 	}
 
 	drv := NewDriver(conf)
 
-	assert.Equal(t, "number", drv.FieldType("speed"))
-	assert.Equalf(t, float64(0), drv.FieldDefault("speed"),
-		"integer YAML default is expected to fall back to 0 (uint64 != float64)")
+	assert.Equal(t, "number", drv.FieldType("speed_int"))
+	assert.Equalf(t, uint64(50), drv.FieldDefault("speed_int"),
+		"integer YAML default is expected to accept uint64 type assertion")
+
+	assert.Equal(t, "number", drv.FieldType("speed_float"))
+	assert.Equalf(t, float64(50), drv.FieldDefault("speed_float"),
+		"integer YAML default is expected to accept float64 type assertion")
+
+	assert.Equal(t, "number", drv.FieldType("speed_def"))
+	assert.Equalf(t, int(50), drv.FieldDefault("speed_def"),
+		"integer YAML default is expected to fall back to int type assertion")
 }
 
 // TestDriver_FieldDefault_MissingNumber tests the zero-value fallback when a
