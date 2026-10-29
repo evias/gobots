@@ -135,8 +135,8 @@ func (m *Message) ReadFrom(r io.Reader) (int64, error) {
 
 // ----------------------------------------------------------------------------
 
-// LoadFromBytes loads a [Message] instance from a bytes slice payload.
-func LoadFromBytes(b []byte) (*Message, error) {
+// LoadMessageFromBytes loads a [Message] instance from a bytes slice payload.
+func LoadMessageFromBytes(b []byte) (*Message, error) {
 	var m Message
 	if err := m.UnmarshalBinary(b); err != nil {
 		return nil, err

@@ -235,10 +235,9 @@ func (drv *robotDriver) WireConfig(command string, args any) WireConfig {
 // LoadFromConfig loads a [Driver] instance from a YAML configuration file.
 // An error is returned if the file does not exist, or if it cannot be read,
 // or if the format does not satisfy the unmarshalling to [DriverConfig].
-//
-// TODO(evias): Should accept options DriverOption if any available.
 func LoadFromConfig(
 	cfgFile string,
+	options ...DriverOption,
 ) (Driver, error) {
 	if _, err := os.Stat(cfgFile); err != nil {
 		return nil, fmt.Errorf("gobot driver file not found: %w", err)
@@ -254,5 +253,5 @@ func LoadFromConfig(
 		return nil, fmt.Errorf("failed to unmarshal driver config: %w", err)
 	}
 
-	return NewDriver(conf), nil
+	return NewDriver(conf, options...), nil
 }

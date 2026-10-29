@@ -208,7 +208,10 @@ func (sim *robotSimulator) Frames() <-chan Frame { return sim.frames }
 // ----------------------------------------------------------------------------
 // Routines
 
-// TODO(evias): Should read messages from driver and validate content.
+// receiveRoutine creates a long-running loop that reads messages from the
+// simulated [bufio.Reader] instance, interprets the bytes as [botfile.Message]
+// structures to validate their content, and communicates processed frames
+// on the receive channel, i.e. see [robotSimulator#Frames].
 func (sim *robotSimulator) receiveRoutine(ctx context.Context) {
 	defer close(sim.frames) // signal consumers: no more frames
 
@@ -216,7 +219,7 @@ func (sim *robotSimulator) receiveRoutine(ctx context.Context) {
 	for i := 0; ; i++ {
 		n, err := sim.reader.Read(buf)
 		if n > 0 {
-			rawMessage, err := botfile.LoadFromBytes(buf[:n])
+			rawMessage, err := botfile.LoadMessageFromBytes(buf[:n])
 			if err != nil {
 				// Invalid payloads are skipped: no frame is emitted and the
 				// message sequence does not increment.

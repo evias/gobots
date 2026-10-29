@@ -230,8 +230,6 @@ func (r *Robot) IsConnected() bool {
 // given unsuccessful call to [bufio.Writer#Write], otherwise returns nil.
 //
 // Send implements IRobot.
-//
-// TODO(evias): End-of-frame byte(s) should be read from driver.
 func (r *Robot) Send(msg botfile.Wireable) error {
 	if r.ctx.Err() != nil || !r.IsConnected() {
 		return &apierr.AppError{
@@ -355,8 +353,6 @@ func (r *Robot) receiveRoutine(connCtx context.Context) {
 // sendHeartbeat formats a heartbeat [botfile.Wire] message and sends it.
 // Skipped when no heartbeat command is configured.
 // Returns an error given an unsuccessful message sending operation.
-//
-// TODO(evias): End-of-frame byte(s) should be read from driver.
 func (r *Robot) checkSendHeartbeat() error {
 	if r.ctx.Err() != nil || !r.driver.HasCommand("heartbeat") {
 		return nil

@@ -173,21 +173,21 @@ func TestMessage_RoundTrip(t *testing.T) {
 	b, err := original.MarshalBinary()
 	require.NoError(t, err)
 
-	decoded, err := LoadFromBytes(b)
+	decoded, err := LoadMessageFromBytes(b)
 	require.NoError(t, err)
 
 	assert.Equal(t, original.Payload, decoded.Payload)
 	assert.Equal(t, original.String(), decoded.String())
 }
 
-// TestLoadFromBytes tests the [LoadFromBytes] constructor.
-func TestLoadFromBytes(t *testing.T) {
-	msg, err := LoadFromBytes([]byte{0, 0, 0, 1, 'x'})
+// TestLoadMessageFromBytes tests the [LoadMessageFromBytes] constructor.
+func TestLoadMessageFromBytes(t *testing.T) {
+	msg, err := LoadMessageFromBytes([]byte{0, 0, 0, 1, 'x'})
 
 	require.NoError(t, err)
 	assert.Equal(t, []byte("x"), msg.Payload)
 
-	_, err = LoadFromBytes([]byte{0, 0})
+	_, err = LoadMessageFromBytes([]byte{0, 0})
 	assert.ErrorIs(t, err, ErrShort)
 }
 
